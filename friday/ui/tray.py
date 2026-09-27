@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,12 @@ def _icon_image() -> Any:
     draw.ellipse((4, 4, size - 4, size - 4), outline=(70, 210, 255, 255), width=5)
     draw.ellipse((22, 22, size - 22, size - 22), fill=(170, 235, 255, 255))
     return image
+
+
+def save_icon(path: Path) -> None:
+    """The same ring as a Windows .ico file (desktop shortcut)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _icon_image().save(path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
 
 
 class Tray:
