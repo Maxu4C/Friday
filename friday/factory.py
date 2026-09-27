@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from friday.adapters.brain_claude_code import ClaudeCodeBrain
@@ -39,6 +39,28 @@ def setup_logging() -> None:
     actions = logging.getLogger("friday.actions")
     actions.addHandler(handler("actions.log"))
     actions.propagate = False
+    _log_uncaught_errors()
+
+
+def _log_uncaught_errors() -> None:
+    """Without a console (desktop shortcut), a crash must at least leave a trace."""
+    import threading
+
+    crash = logging.getLogger("friday.crash")
+
+    def on_error(kind: type[BaseException], error: BaseException, trace: Any) -> None:
+        crash.critical("Unhandled error", exc_info=(kind, error, trace))
+
+    def on_thread_error(args: threading.ExceptHookArgs) -> None:
+        if args.exc_value is not None:
+            crash.critical(
+                "Unhandled error in thread %s",
+                args.thread.name if args.thread else "?",
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            )
+
+    sys.excepthook = on_error
+    threading.excepthook = on_thread_error
 
 
 def load() -> FridayConfig | None:

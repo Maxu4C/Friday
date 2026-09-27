@@ -11,6 +11,22 @@ from friday.factory import create_controller, create_ears, create_narrator, load
 logger = logging.getLogger(__name__)
 
 
+def _ensure_streams() -> None:
+    """Under pythonw (desktop shortcut, autostart) there is no console: stdout and stderr
+    are None and libraries writing to them crash. Send them to logs/console.log."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    from friday.config import PROJECT_ROOT
+
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+    stream = open(log_dir / "console.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+    if sys.stdout is None:
+        sys.stdout = stream
+    if sys.stderr is None:
+        sys.stderr = stream
+
+
 def _write(text: str) -> None:
     sys.stdout.write(text)
     sys.stdout.flush()
@@ -141,6 +157,7 @@ def _list_devices() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _ensure_streams()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
