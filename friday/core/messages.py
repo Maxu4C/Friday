@@ -7,6 +7,8 @@ from datetime import date, datetime
 from friday.core.events import BrainError, BrainErrorKind, Mode
 
 MODE_LABELS = {Mode.CLAUDE: "Claude", Mode.CLAUDE_CODE: "Claude Code"}
+HEARD_NOTHING = "Je n'ai rien entendu."
+NOT_UNDERSTOOD = "Je n'ai rien compris."
 _MONTHS = (
     "janvier", "février", "mars", "avril", "mai", "juin",
     "juillet", "août", "septembre", "octobre", "novembre", "décembre",

@@ -43,6 +43,30 @@ class AudioOutput(Protocol):
         """Play until the end, or stop as soon as `cancelled()` becomes true."""
 
 
+class SpeechToText(Protocol):
+    def transcribe(self, clip: AudioClip) -> str: ...
+
+
+class VoiceActivityDetector(Protocol):
+    """Probability that a 512-sample, 16 kHz frame contains speech."""
+
+    def reset(self) -> None: ...
+
+    def probability(self, frame: bytes) -> float: ...
+
+
+@dataclass(frozen=True)
+class Heard:
+    text: str | None  # None: nothing usable
+    reason: str = ""  # "silence" (nobody spoke) or "incompris" (speech, but no usable text)
+
+
+class Ears(Protocol):
+    """Listen for one utterance (push-to-talk or after the wake word) and transcribe it."""
+
+    def listen(self) -> Heard: ...
+
+
 class Storage(Protocol):
     """Persistence of a small JSON document (sessions, usage)."""
 

@@ -8,12 +8,14 @@ runtime. An unknown or unplugged device falls back to the system default.
 from __future__ import annotations
 
 import logging
+import queue
 import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from friday.core.ports import AudioClip
+from friday.core.endpointing import Endpoint, Endpointer, EndpointSettings
+from friday.core.ports import AudioClip, VoiceActivityDetector
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +152,69 @@ class SoundDevicePlayer:
                     stream.abort()
                     return
                 stream.write(samples[start : start + block])
+
+
+class MicrophoneRecorder:
+    """Records one utterance: waits for speech, stops after a silence (or the time limit)."""
+
+    SAMPLE_RATE = 16000
+    FRAME_SAMPLES = 512
+
+    def __init__(
+        self,
+        device_name: str | None,
+        vad: VoiceActivityDetector,
+        settings: EndpointSettings,
+    ) -> None:
+        self._device_name = device_name
+        self._vad = vad
+        self._settings = settings
+
+    def record(self, cancelled: Callable[[], bool] = lambda: False) -> AudioClip | None:
+        """The utterance, or None if nobody spoke (or `cancelled()` became true)."""
+        import sounddevice as sd
+
+        device = match_device(self._device_name, query_devices(), "input")
+        try:
+            return self._record(sd, device, cancelled)
+        except sd.PortAudioError:
+            if device is None:
+                raise
+            logger.warning("Microphone %r failed, using the default one", self._device_name)
+            return self._record(sd, None, cancelled)
+
+    def _record(
+        self, sd: Any, device: int | None, cancelled: Callable[[], bool]
+    ) -> AudioClip | None:
+        frames: queue.Queue[bytes] = queue.Queue()
+
+        def on_audio(data: Any, _frames: int, _time: Any, status: Any) -> None:
+            if status:
+                logger.debug("Microphone status: %s", status)
+            frames.put(bytes(data))
+
+        self._vad.reset()
+        endpointer = Endpointer(self._settings)
+        with sd.RawInputStream(
+            samplerate=self.SAMPLE_RATE,
+            blocksize=self.FRAME_SAMPLES,
+            channels=1,
+            dtype="int16",
+            device=device,
+            callback=on_audio,
+        ):
+            while not cancelled():
+                try:
+                    frame = frames.get(timeout=2)
+                except queue.Empty:
+                    logger.warning("No audio from the microphone")
+                    return None
+                state = endpointer.push(frame, self._vad.probability(frame))
+                if state is Endpoint.DONE:
+                    return AudioClip(endpointer.audio(), self.SAMPLE_RATE)
+                if state is Endpoint.NO_SPEECH:
+                    return None
+        return None
 
 
 def default_device_name(devices: Sequence[AudioDevice], kind: Kind) -> str | None:

@@ -1,5 +1,30 @@
 # Journal de bord
 
+## Phase 4 — Reconnaissance vocale, push-to-talk (2026-09-27)
+
+### Fait
+- **faster-whisper 1.2.1** (CTranslate2 4.8.2) sur la **RTX 4070 Ti** (CUDA via les paquets pip `nvidia-cublas-cu12` et `nvidia-cudnn-cu12`, rendus visibles par `os.add_dll_directory`), modèle **large-v3-turbo** dans `models/whisper` (téléchargé une fois, puis chargé hors ligne avec `local_files_only`). Langue forcée `fr`, `initial_prompt` avec les mots rares (Friday, Claude, Haiku, Opus, Fable, session, Mr Chemmane). Repli automatique sur CPU (int8).
+- **Silero VAD v6** (fourni avec faster-whisper, exécuté par onnxruntime) en flux continu : trames de 32 ms, état récurrent conservé entre les trames. Repli : détecteur d'énergie avec plancher de bruit adaptatif (`audio.vad: energy`).
+- `friday/core/endpointing.py` : début de parole après 0,2 s de voix continue (les clics sont ignorés), 0,3 s de pré-enregistrement, fin après `end_silence_seconds` (1 s) avec hystérésis pour ne pas couper les fins de mots, 20 s maximum, « Je n'ai rien entendu » après 6 s sans parole.
+- `friday/core/transcript.py` : filtre des hallucinations de Whisper sur le silence (« Sous-titrage ST' 501 », « Merci d'avoir regardé », Amara.org…) ; segments marqués « pas de parole » par Whisper écartés.
+- `MicrophoneRecorder` : micro choisi **par son nom**, 16 kHz mono ; `VoiceInput` : petit carillon au début et à la fin de l'écoute (sons générés, aucun fichier), enregistrement, transcription.
+- `friday chat` : **Entrée sans rien taper = parler** (push-to-talk). La transcription est affichée (« Vous (voix) > … ») puis traitée exactement comme une phrase tapée : « utilise Opus » à la voix change de modèle sans appeler Claude. La voix de FRIDAY est coupée avant d'écouter (jamais d'enregistrement de sa propre voix). `--sans-micro` pour le clavier seul.
+- Config `audio` (vad, seuils, délais, carillons) et `stt` (modèle, device, compute_type, beam_size, initial_prompt).
+- 266 tests, dont une chaîne réelle sans micro : phrase dite par Piper → Silero → fin de phrase → Whisper → reconnue comme la commande `SetModel("opus")`.
+
+### Mesuré
+- Whisper large-v3-turbo sur GPU : **0,26 s** pour transcrire 4,2 s de parole (transcription exacte de « Friday, utilise Opus et crée une nouvelle session pour le projet boucherie »).
+- Micro du casque (« Microphone sur casque (2- USB Audio Device) ») accessible à 16 kHz.
+
+### Décisions
+- **large-v3-turbo** plutôt que large-v3 : même famille (écart de précision minime en français), environ deux fois plus léger et plus rapide ; `large-v3` reste configurable.
+- Fin de phrase à **1 s** de silence avec Silero (plus réactif que les 1,5 s prévus pour le repli par énergie, qui reste réglable).
+- Le push-to-talk passe par la touche Entrée dans le terminal ; le **raccourci global Ctrl+Alt+F** et le bouton de l'interface arrivent avec l'écoute permanente (phase 5) et le HUD (phase 7), qui remplacent la boucle `input()` du terminal.
+
+### Reste
+- Test réel avec votre voix (je ne peux pas parler dans votre micro).
+- Mot d'activation, anti-écho, « stop » vocal pendant la parole : phase 5.
+
 ## Phase 3 — Synthèse vocale (2026-09-27)
 
 ### Fait

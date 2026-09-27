@@ -34,8 +34,9 @@ from friday.core.intents import (
     ResumeSession,
     SetMode,
 )
-from friday.core.messages import MODE_LABELS
+from friday.core.messages import HEARD_NOTHING, MODE_LABELS, NOT_UNDERSTOOD
 from friday.core.narrator import Narrator
+from friday.core.ports import Ears
 from friday.core.speech import Segment, Speak, SpeechStream
 from friday.core.text import normalize
 
@@ -74,22 +75,28 @@ class ChatSession:
         write: Callable[[str], None],
         read: Callable[[str], str],
         narrator: Narrator | None = None,
+        ears: Ears | None = None,
     ) -> None:
         self._controller = controller
         self._write = write
         self._read = read
         self._narrator = narrator
+        self._ears = ears
         self._speech = SpeechStream()
         self._streaming = False
 
     def run(self) -> int:
         self._render(self._controller.start())
-        self._write("Tapez /aide pour l'aide.\n")
+        if self._ears is not None:
+            self._write("Appuyez sur Entrée (sans rien taper) pour parler. /aide pour l'aide.\n")
+        else:
+            self._write("Tapez /aide pour l'aide.\n")
+        prompt = "\nVous (Entrée = parler) > " if self._ears is not None else "\nVous > "
         try:
             while True:
                 try:
                     # PowerShell may prefix piped input with a UTF-8 byte order mark.
-                    line = self._read("\nVous > ").lstrip("﻿").strip()
+                    line = self._read(prompt).lstrip("﻿").strip()
                 except EOFError:
                     break
                 except KeyboardInterrupt:
@@ -99,7 +106,10 @@ class ChatSession:
                         continue
                     self._write("\n")
                     break
-                if line and not self.handle(line):
+                if not line and self._ears is not None:
+                    if not self.listen():
+                        break
+                elif line and not self.handle(line):
                     break
         finally:
             self._controller.close()
@@ -109,6 +119,22 @@ class ChatSession:
             self._narrator.wait(timeout=10)
             self._narrator.close()
         return 0
+
+    def listen(self) -> bool:
+        """Push-to-talk: record one spoken sentence and handle it; return False to quit."""
+        assert self._ears is not None
+        if self._narrator is not None:
+            self._narrator.stop()  # never record FRIDAY's own voice
+        self._write("  [écoute… parlez]\n")
+        heard = self._ears.listen()
+        if heard.text is None:
+            message = HEARD_NOTHING if heard.reason == "silence" else NOT_UNDERSTOOD
+            self._say(message)
+            if self._narrator is not None:
+                self._narrator.say(message)
+            return True
+        self._write(f"Vous (voix) > {heard.text}\n")
+        return self.handle(heard.text)
 
     def handle(self, line: str) -> bool:
         """Process one input line; return False to quit."""

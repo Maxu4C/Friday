@@ -69,6 +69,22 @@ class TtsConfig:
 class AudioConfig:
     input_device: str | None
     output_device: str | None
+    vad: str = "silero"  # "silero" or "energy"
+    vad_threshold: float = 0.5
+    listen_timeout_seconds: float = 6.0
+    end_silence_seconds: float = 1.0
+    max_listen_seconds: float = 20.0
+    cues: bool = True
+
+
+@dataclass(frozen=True)
+class SttConfig:
+    model: str
+    device: str
+    compute_type: str
+    models_dir: Path
+    beam_size: int
+    initial_prompt: str
 
 
 @dataclass(frozen=True)
@@ -79,6 +95,7 @@ class FridayConfig:
     router: RouterRules
     tts: TtsConfig
     audio: AudioConfig
+    stt: SttConfig
     ui_host: str
     ui_port: int
     data_dir: Path
@@ -121,6 +138,7 @@ def parse_config(raw: dict[str, Any]) -> FridayConfig:
         router=_parse_router(_section(raw, "router")),
         tts=_parse_tts(_section(raw, "tts")),
         audio=_parse_audio(_section(raw, "audio")),
+        stt=_parse_stt(_section(raw, "stt")),
         ui_host=host,
         ui_port=port,
         data_dir=data_dir,
@@ -219,7 +237,43 @@ def _parse_audio(section: dict[str, Any]) -> AudioConfig:
                 f"audio.{key} doit être un nom de périphérique entre guillemets, ou null."
             )
         devices[key] = value
-    return AudioConfig(devices["input_device"], devices["output_device"])
+    vad = section.get("vad", "silero")
+    if vad not in ("silero", "energy"):
+        raise ConfigError("audio.vad doit valoir silero ou energy.")
+
+    def number(key: str, default: float, low: float, high: float) -> float:
+        value = section.get(key, default)
+        if not isinstance(value, int | float) or not low <= value <= high:
+            raise ConfigError(f"audio.{key} doit être un nombre entre {low} et {high}.")
+        return float(value)
+
+    return AudioConfig(
+        input_device=devices["input_device"],
+        output_device=devices["output_device"],
+        vad=vad,
+        vad_threshold=number("vad_threshold", 0.5, 0.05, 0.95),
+        listen_timeout_seconds=number("listen_timeout_seconds", 6, 1, 60),
+        end_silence_seconds=number("end_silence_seconds", 1.0, 0.3, 5),
+        max_listen_seconds=number("max_listen_seconds", 20, 2, 120),
+        cues=bool(section.get("cues", True)),
+    )
+
+
+def _parse_stt(section: dict[str, Any]) -> SttConfig:
+    device = section.get("device", "cuda")
+    if device not in ("cuda", "cpu"):
+        raise ConfigError("stt.device doit valoir cuda ou cpu.")
+    beam = section.get("beam_size", 5)
+    if not isinstance(beam, int) or not 1 <= beam <= 10:
+        raise ConfigError("stt.beam_size doit être un entier entre 1 et 10.")
+    return SttConfig(
+        model=_str(section, "stt.model"),
+        device=device,
+        compute_type=str(section.get("compute_type", "float16" if device == "cuda" else "int8")),
+        models_dir=_path(section.get("models_dir", "models/whisper"), "stt.models_dir"),
+        beam_size=beam,
+        initial_prompt=str(section.get("initial_prompt", "")),
+    )
 
 
 def _section(raw: dict[str, Any], key: str) -> dict[str, Any]:

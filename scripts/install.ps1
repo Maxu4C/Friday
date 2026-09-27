@@ -51,7 +51,11 @@ if (Test-Path (Join-Path $root "models\piper\$voice.onnx")) {
 } else {
     & (Join-Path $root '.venv\Scripts\python.exe') -m piper.download_voices $voice --download-dir (Join-Path $root 'models\piper')
 }
-# À venir : phase 4 (faster-whisper, Silero VAD) et phase 5 (openWakeWord).
+Step 'Reconnaissance vocale (Whisper large-v3-turbo, ~1,6 Go)'
+$whisper = 'large-v3-turbo'   # doit correspondre à stt.model dans config\friday.yaml
+& (Join-Path $root '.venv\Scripts\python.exe') -c "from friday.adapters.stt_faster_whisper import download; from pathlib import Path; download('$whisper', Path(r'$root\models\whisper'))"
+# Le détecteur de parole Silero est fourni avec faster-whisper (aucun téléchargement).
+# À venir : phase 5 (openWakeWord).
 
 Step 'Périphériques audio disponibles'
 & (Join-Path $root '.venv\Scripts\friday.exe') devices

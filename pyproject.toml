@@ -5,7 +5,10 @@ description = "FRIDAY — assistant vocal local piloté par Claude Code"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+    "faster-whisper>=1.2.1",
     "numpy>=2.4.6",
+    "nvidia-cublas-cu12>=12.9.2.10",
+    "nvidia-cudnn-cu12>=9,<10",
     "piper-tts>=1.8.0",
     "pyttsx3>=2.99",
     "pyyaml>=6.0.3",
@@ -34,7 +37,7 @@ python_version = "3.12"
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["sounddevice", "pyttsx3"]
+module = ["sounddevice", "pyttsx3", "onnxruntime", "faster_whisper", "faster_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

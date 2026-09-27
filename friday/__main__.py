@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from friday.config import FridayConfig
     from friday.core.controller import Controller
     from friday.core.narrator import Narrator
+    from friday.core.ports import Ears
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
@@ -114,6 +115,40 @@ def create_narrator(config: FridayConfig) -> Narrator:
     return Narrator(tts, SoundDevicePlayer(config.audio.output_device))
 
 
+def create_ears(config: FridayConfig) -> Ears:
+    """Microphone + voice activity detection + Whisper speech recognition."""
+    from friday.adapters.audio_io import MicrophoneRecorder, SoundDevicePlayer
+    from friday.adapters.stt_faster_whisper import FasterWhisperSTT
+    from friday.adapters.vad import EnergyVAD, SileroVAD
+    from friday.adapters.voice_input import VoiceInput
+    from friday.core.endpointing import EndpointSettings
+    from friday.core.ports import VoiceActivityDetector
+
+    audio, stt = config.audio, config.stt
+    vad: VoiceActivityDetector
+    try:
+        vad = SileroVAD() if audio.vad == "silero" else EnergyVAD()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Silero VAD unavailable (%s), using energy", exc)
+        vad = EnergyVAD()
+    settings = EndpointSettings(
+        threshold=audio.vad_threshold,
+        start_timeout=audio.listen_timeout_seconds,
+        end_silence=audio.end_silence_seconds,
+        max_seconds=audio.max_listen_seconds,
+    )
+    recognizer = FasterWhisperSTT(
+        stt.model,
+        stt.models_dir,
+        device=stt.device,
+        compute_type=stt.compute_type,
+        initial_prompt=stt.initial_prompt,
+        beam_size=stt.beam_size,
+    )
+    cues = SoundDevicePlayer(audio.output_device) if audio.cues else None
+    return VoiceInput(MicrophoneRecorder(audio.input_device, vad, settings), recognizer, cues)
+
+
 def _load() -> FridayConfig | None:
     from friday.config import ConfigError, load_config
 
@@ -126,7 +161,7 @@ def _load() -> FridayConfig | None:
     return config
 
 
-def _chat(mute: bool) -> int:
+def _chat(mute: bool, no_mic: bool) -> int:
     from friday.chat import ChatSession
 
     config = _load()
@@ -140,7 +175,17 @@ def _chat(mute: bool) -> int:
         sys.stdout.flush()
 
     narrator = None if mute or not config.tts.enabled else create_narrator(config)
-    session = ChatSession(create_controller(config), write=write, read=input, narrator=narrator)
+    ears = None
+    if not no_mic:
+        write("Chargement de la reconnaissance vocale…\n")
+        try:
+            ears = create_ears(config)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Speech recognition unavailable")
+            write(f"Reconnaissance vocale indisponible ({exc}) : clavier seulement.\n")
+    session = ChatSession(
+        create_controller(config), write=write, read=input, narrator=narrator, ears=ears
+    )
     return session.run()
 
 
@@ -227,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("devices", help="liste les périphériques audio")
     chat = commands.add_parser("chat", help="discute avec FRIDAY au clavier")
     chat.add_argument("--muet", action="store_true", help="réponses écrites seulement")
+    chat.add_argument("--sans-micro", action="store_true", help="clavier seulement")
     say = commands.add_parser("dis", help="fait prononcer un texte à FRIDAY (test de la voix)")
     say.add_argument("texte", nargs="+")
     commands.add_parser("voix", help="fait écouter les voix disponibles pour choisir")
@@ -235,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "devices":
         return _list_devices()
     if args.command == "chat":
-        return _chat(args.muet)
+        return _chat(args.muet, args.sans_micro)
     if args.command == "dis":
         return _say(" ".join(args.texte))
     if args.command == "voix":

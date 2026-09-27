@@ -33,6 +33,15 @@ Parlez (ou tapez) naturellement ; ces commandes sont traitées sur votre PC, san
 
 Chaque session garde son mode, son modèle et sa conversation. Au redémarrage, FRIDAY reprend la dernière session. Raccourcis clavier : `/aide`.
 
+### Parler à FRIDAY
+
+Dans `friday chat`, appuyez sur **Entrée sans rien taper** : un petit son indique que FRIDAY écoute. Parlez, puis marquez une pause d'une seconde ; un second son indique la fin de l'écoute. FRIDAY affiche ce qu'elle a compris, puis répond.
+
+- La reconnaissance vocale (Whisper) tourne sur votre carte graphique, entièrement en local.
+- **Micro** : `audio.input_device` dans `config\friday.yaml` (nom donné par `friday devices`).
+- Coupée trop tôt ? Augmentez `audio.end_silence_seconds`. Déclenchée par le bruit ? Montez `audio.vad_threshold`.
+- `friday chat --sans-micro` : clavier seulement.
+
 ### Voix
 
 FRIDAY lit ses réponses à voix haute (voix française Piper, 100 % locale), phrase par phrase dès que Claude commence à répondre. Le contenu technique (code, chemins, tableaux) est affiché mais jamais lu.
