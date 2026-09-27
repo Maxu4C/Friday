@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import logging
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
+
+from friday.core.ports import AudioClip
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,51 @@ def query_devices() -> list[AudioDevice]:
         )
         for index, info in enumerate(sd.query_devices())
     ]
+
+
+class SoundDevicePlayer:
+    """Plays clips on the configured output, resolved by name before each clip.
+
+    A headset unplugged between two sentences simply moves playback to the
+    Windows default output instead of crashing.
+    """
+
+    BLOCK_SECONDS = 0.05
+
+    def __init__(self, device_name: str | None = None) -> None:
+        self._device_name = device_name
+
+    def play(self, clip: AudioClip, cancelled: Callable[[], bool]) -> None:
+        import numpy as np
+        import sounddevice as sd
+
+        samples = np.frombuffer(clip.pcm, dtype=np.int16).reshape(-1, clip.channels)
+        device = match_device(self._device_name, query_devices(), "output")
+        try:
+            self._write(sd, samples, clip, device, cancelled)
+        except sd.PortAudioError:
+            if device is None:
+                raise
+            logger.warning("Output device %r failed, using the default one", self._device_name)
+            self._write(sd, samples, clip, None, cancelled)
+
+    def _write(
+        self,
+        sd: Any,
+        samples: Any,
+        clip: AudioClip,
+        device: int | None,
+        cancelled: Callable[[], bool],
+    ) -> None:
+        block = max(1, int(clip.sample_rate * self.BLOCK_SECONDS))
+        with sd.OutputStream(
+            samplerate=clip.sample_rate, channels=clip.channels, dtype="int16", device=device
+        ) as stream:
+            for start in range(0, len(samples), block):
+                if cancelled():
+                    stream.abort()
+                    return
+                stream.write(samples[start : start + block])
 
 
 def default_device_name(devices: Sequence[AudioDevice], kind: Kind) -> str | None:

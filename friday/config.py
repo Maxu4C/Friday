@@ -52,11 +52,28 @@ class ClaudeConfig:
 
 
 @dataclass(frozen=True)
+class TtsConfig:
+    enabled: bool
+    engine: str  # "piper" or "windows_sapi"
+    voice: str
+    models_dir: Path
+    length_scale: float
+
+
+@dataclass(frozen=True)
+class AudioConfig:
+    input_device: str | None
+    output_device: str | None
+
+
+@dataclass(frozen=True)
 class FridayConfig:
     user_names: tuple[str, ...]
     claude: ClaudeConfig
     models: ModelsConfig
     router: RouterRules
+    tts: TtsConfig
+    audio: AudioConfig
     ui_host: str
     ui_port: int
     data_dir: Path
@@ -97,6 +114,8 @@ def parse_config(raw: dict[str, Any]) -> FridayConfig:
         claude=claude,
         models=models,
         router=_parse_router(_section(raw, "router")),
+        tts=_parse_tts(_section(raw, "tts")),
+        audio=_parse_audio(_section(raw, "audio")),
         ui_host=host,
         ui_port=port,
         data_dir=data_dir,
@@ -153,6 +172,37 @@ def _parse_router(section: dict[str, Any]) -> RouterRules:
             raise ConfigError(f"router.{key} doit être une liste de textes.")
         lists[key] = tuple(value)
     return RouterRules(max_words, lists["simple_patterns"], lists["complex_patterns"])
+
+
+TTS_ENGINES = ("piper", "windows_sapi")
+
+
+def _parse_tts(section: dict[str, Any]) -> TtsConfig:
+    engine = section.get("engine", "piper")
+    if engine not in TTS_ENGINES:
+        raise ConfigError(f"tts.engine doit valoir {' ou '.join(TTS_ENGINES)}.")
+    length_scale = section.get("length_scale", 1.0)
+    if not isinstance(length_scale, int | float) or not 0.3 <= length_scale <= 3:
+        raise ConfigError("tts.length_scale doit être un nombre entre 0.3 et 3.")
+    return TtsConfig(
+        enabled=bool(section.get("enabled", True)),
+        engine=engine,
+        voice=_str(section, "tts.voice"),
+        models_dir=_path(section.get("models_dir", "models/piper"), "tts.models_dir"),
+        length_scale=float(length_scale),
+    )
+
+
+def _parse_audio(section: dict[str, Any]) -> AudioConfig:
+    devices = {}
+    for key in ("input_device", "output_device"):
+        value = section.get(key)
+        if value is not None and not isinstance(value, str):
+            raise ConfigError(
+                f"audio.{key} doit être un nom de périphérique entre guillemets, ou null."
+            )
+        devices[key] = value
+    return AudioConfig(devices["input_device"], devices["output_device"])
 
 
 def _section(raw: dict[str, Any], key: str) -> dict[str, Any]:

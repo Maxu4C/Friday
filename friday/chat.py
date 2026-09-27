@@ -10,7 +10,15 @@ import signal
 from collections.abc import Callable, Iterator
 from types import FrameType
 
-from friday.core.controller import Ask, Controller, Output, Say, ShowSessions, StateChanged
+from friday.core.controller import (
+    Ask,
+    Controller,
+    Output,
+    Say,
+    ShowSessions,
+    StateChanged,
+    StopSpeaking,
+)
 from friday.core.events import Mode, TextDelta, ToolResult, ToolUse, TurnCompleted
 from friday.core.intents import (
     AskMode,
@@ -27,6 +35,8 @@ from friday.core.intents import (
     SetMode,
 )
 from friday.core.messages import MODE_LABELS
+from friday.core.narrator import Narrator
+from friday.core.speech import Segment, Speak, SpeechStream
 from friday.core.text import normalize
 
 HELP = """Parlez normalement : « utilise Opus », « passe en mode Claude Code »,
@@ -63,10 +73,13 @@ class ChatSession:
         *,
         write: Callable[[str], None],
         read: Callable[[str], str],
+        narrator: Narrator | None = None,
     ) -> None:
         self._controller = controller
         self._write = write
         self._read = read
+        self._narrator = narrator
+        self._speech = SpeechStream()
         self._streaming = False
 
     def run(self) -> int:
@@ -79,17 +92,29 @@ class ChatSession:
                     line = self._read("\nVous > ").lstrip("﻿").strip()
                 except EOFError:
                     break
+                except KeyboardInterrupt:
+                    if self._narrator is not None and self._narrator.speaking:
+                        self._narrator.stop()  # Ctrl+C while FRIDAY speaks: silence only
+                        self._write("\n")
+                        continue
+                    self._write("\n")
+                    break
                 if line and not self.handle(line):
                     break
-        except KeyboardInterrupt:
-            self._write("\n")
         finally:
             self._controller.close()
         self._say("À bientôt.")
+        if self._narrator is not None:
+            self._narrator.say("À bientôt.")
+            self._narrator.wait(timeout=10)
+            self._narrator.close()
         return 0
 
     def handle(self, line: str) -> bool:
         """Process one input line; return False to quit."""
+        if self._narrator is not None:
+            self._narrator.stop()  # a new request cuts the previous answer
+        self._speech = SpeechStream()
         if not line.startswith("/"):
             self._render(self._controller.handle(line))
             return True
@@ -157,6 +182,8 @@ class ChatSession:
 
         def interrupt(_signum: int, _frame: FrameType | None) -> None:
             self._controller.interrupt()
+            if self._narrator is not None:
+                self._narrator.stop()
 
         signal.signal(signal.SIGINT, interrupt)
         try:
@@ -172,6 +199,11 @@ class ChatSession:
                 self._write("\nFRIDAY > ")
                 self._streaming = True
             self._write(output.text)
+            self._speak(self._speech.feed(output.text))
+        elif isinstance(output, StopSpeaking):
+            if self._narrator is not None:
+                self._narrator.stop()
+            self._speech = SpeechStream()
         elif isinstance(output, ToolUse):
             self._end_stream()
             self._write(f"  [outil] {output.name} {_brief(output.input)}\n")
@@ -179,10 +211,13 @@ class ChatSession:
             self._write(f"  [échec] {output.summary}\n")
         elif isinstance(output, TurnCompleted):
             self._end_stream()
+            self._speak(self._speech.flush())
             if output.permission_denials:
                 self._write(f"  [refusé] {', '.join(output.permission_denials)}\n")
         elif isinstance(output, Say | Ask):
             self._say(output.text)
+            if self._narrator is not None:
+                self._narrator.say(output.text)
         elif isinstance(output, ShowSessions):
             self._end_stream()
             for record in output.sessions:
@@ -193,6 +228,13 @@ class ChatSession:
                 self._write(line + (f" · {record.summary}" if record.summary else "") + "\n")
         elif isinstance(output, StateChanged):
             pass  # the graphical interface uses it; the text chat announces changes with Say
+
+    def _speak(self, segments: list[Segment]) -> None:
+        if self._narrator is None:
+            return
+        for segment in segments:
+            if isinstance(segment, Speak):
+                self._narrator.say(segment.text)
 
     def _end_stream(self) -> None:
         if self._streaming:

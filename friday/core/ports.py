@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -21,6 +21,26 @@ class SessionState:
 
 class BrainBusyError(RuntimeError):
     """A request is already running."""
+
+
+@dataclass(frozen=True)
+class AudioClip:
+    pcm: bytes  # signed 16-bit little-endian samples
+    sample_rate: int
+    channels: int = 1
+
+    @property
+    def duration(self) -> float:
+        return len(self.pcm) / (2 * self.channels * self.sample_rate)
+
+
+class TextToSpeech(Protocol):
+    def synthesize(self, text: str) -> AudioClip: ...
+
+
+class AudioOutput(Protocol):
+    def play(self, clip: AudioClip, cancelled: Callable[[], bool]) -> None:
+        """Play until the end, or stop as soon as `cancelled()` becomes true."""
 
 
 class Storage(Protocol):

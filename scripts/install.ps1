@@ -43,8 +43,15 @@ if (Test-Path $config) {
     Write-Host 'config\friday.yaml créé à partir de l''exemple.'
 }
 
-# Téléchargement des modèles audio (une seule fois dans models\) :
-# ajouté en phase 3 (Piper), phase 4 (faster-whisper, Silero VAD) et phase 5 (openWakeWord).
+# Modèles audio : téléchargés une seule fois dans models\ (gratuits, utilisés hors ligne).
+Step 'Voix de FRIDAY (Piper, voix française)'
+$voice = 'fr_FR-siwis-medium'   # doit correspondre à tts.voice dans config\friday.yaml
+if (Test-Path (Join-Path $root "models\piper\$voice.onnx")) {
+    Write-Host "Voix $voice déjà présente."
+} else {
+    & (Join-Path $root '.venv\Scripts\python.exe') -m piper.download_voices $voice --download-dir (Join-Path $root 'models\piper')
+}
+# À venir : phase 4 (faster-whisper, Silero VAD) et phase 5 (openWakeWord).
 
 Step 'Périphériques audio disponibles'
 & (Join-Path $root '.venv\Scripts\friday.exe') devices

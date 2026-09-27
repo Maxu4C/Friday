@@ -91,7 +91,12 @@ class StateChanged:
     model_locked: bool
 
 
-Output = Say | Ask | ShowSessions | StateChanged | BrainEvent
+@dataclass(frozen=True)
+class StopSpeaking:
+    """The user asked for silence: cut the voice immediately."""
+
+
+Output = Say | Ask | ShowSessions | StateChanged | StopSpeaking | BrainEvent
 
 
 @dataclass(frozen=True)
@@ -554,6 +559,7 @@ class Controller:
 
     def _stop(self, _: Command) -> _Outputs:
         self._brain.interrupt()
+        yield StopSpeaking()
         yield Say("D'accord.")
 
     def _repeat(self, _: Repeat) -> _Outputs:

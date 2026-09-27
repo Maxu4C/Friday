@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from friday.adapters.brain_claude_code import ClaudeCodeBrain
     from friday.config import FridayConfig
     from friday.core.controller import Controller
+    from friday.core.narrator import Narrator
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
@@ -84,16 +85,45 @@ def create_controller(config: FridayConfig) -> Controller:
     )
 
 
-def _chat() -> int:
-    from friday.chat import ChatSession
+def create_narrator(config: FridayConfig) -> Narrator:
+    """Piper voice, or the Windows voice if Piper cannot be loaded."""
+    from friday.adapters.audio_io import SoundDevicePlayer
+    from friday.adapters.tts_piper import PiperTTS
+    from friday.adapters.tts_windows_sapi import WindowsSapiTTS
+    from friday.core.narrator import Narrator
+    from friday.core.ports import TextToSpeech
+
+    tts: TextToSpeech
+    if config.tts.engine == "piper":
+        try:
+            tts = PiperTTS(config.tts.models_dir, config.tts.voice, config.tts.length_scale)
+        except Exception as exc:  # missing model, onnxruntime problem...
+            logging.getLogger(__name__).warning("Piper unavailable (%s), using SAPI", exc)
+            print(f"Voix Piper indisponible ({exc}) : voix Windows utilisée.", file=sys.stderr)
+            tts = WindowsSapiTTS()
+    else:
+        tts = WindowsSapiTTS()
+    return Narrator(tts, SoundDevicePlayer(config.audio.output_device))
+
+
+def _load() -> FridayConfig | None:
     from friday.config import ConfigError, load_config
 
     try:
         config = load_config()
     except ConfigError as exc:
         print(f"Configuration invalide : {exc}", file=sys.stderr)
-        return 2
+        return None
     _setup_logging(config)
+    return config
+
+
+def _chat(mute: bool) -> int:
+    from friday.chat import ChatSession
+
+    config = _load()
+    if config is None:
+        return 2
     if hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
 
@@ -101,8 +131,20 @@ def _chat() -> int:
         sys.stdout.write(text)
         sys.stdout.flush()
 
-    session = ChatSession(create_controller(config), write=write, read=input)
+    narrator = None if mute or not config.tts.enabled else create_narrator(config)
+    session = ChatSession(create_controller(config), write=write, read=input, narrator=narrator)
     return session.run()
+
+
+def _say(text: str) -> int:
+    config = _load()
+    if config is None:
+        return 2
+    narrator = create_narrator(config)
+    narrator.say(text)
+    narrator.wait()
+    narrator.close()
+    return 0
 
 
 def _list_devices() -> int:
@@ -131,13 +173,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="friday", description="FRIDAY, assistant vocal local")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("devices", help="liste les périphériques audio")
-    commands.add_parser("chat", help="discute avec FRIDAY au clavier")
+    chat = commands.add_parser("chat", help="discute avec FRIDAY au clavier")
+    chat.add_argument("--muet", action="store_true", help="réponses écrites seulement")
+    say = commands.add_parser("dis", help="fait prononcer un texte à FRIDAY (test de la voix)")
+    say.add_argument("texte", nargs="+")
 
     args = parser.parse_args(argv)
     if args.command == "devices":
         return _list_devices()
     if args.command == "chat":
-        return _chat()
+        return _chat(args.muet)
+    if args.command == "dis":
+        return _say(" ".join(args.texte))
     return 1
 
 

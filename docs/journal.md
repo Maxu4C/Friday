@@ -1,5 +1,30 @@
 # Journal de bord
 
+## Phase 3 — Synthèse vocale (2026-09-27)
+
+### Fait
+- **Piper TTS** (`piper-tts` 1.8.0, gratuit, hors ligne) avec la voix `fr_FR-siwis-medium` (60 Mo, téléchargée une seule fois dans `models/piper/` par l'outil officiel `python -m piper.download_voices`, aussi appelé par `install.ps1`). Repli automatique sur la **voix Windows (SAPI via pyttsx3)** si Piper ne se charge pas.
+- `friday/core/speech.py` : découpage phrase par phrase **pendant** le streaming de Claude (abréviations, numéros de liste, phrases trop longues coupées à une virgule) ; les blocs `[AFFICHER]` partent vers l'affichage, jamais lus ; nettoyage du texte (markdown, code, liens → « un lien », emojis, `[MODE_CODE]`, « Mr » → « Mister »).
+- `friday/core/narrator.py` : deux fils (synthèse de la phrase suivante pendant la lecture de la phrase en cours) ; `stop()` coupe la phrase en cours et abandonne les suivantes ; rappel `on_speaking` pour la future machine à états (micro coupé pendant la parole, phase 5).
+- `SoundDevicePlayer` : lecture par blocs de 50 ms sur la sortie configurée **par son nom**, résolue à chaque phrase (casque débranché → sortie Windows par défaut).
+- `friday chat` parle : les réponses de Claude et les phrases locales de FRIDAY sont lues. Interruption clavier : Ctrl+C (pendant la réponse ou pendant la lecture), une nouvelle ligne tapée, ou « stop » / « annule ». `friday chat --muet` pour le texte seul ; `friday dis <texte>` pour tester la voix.
+- Config `tts` : `enabled`, `engine`, `voice`, `models_dir`, `length_scale` (vitesse).
+- 241 tests (dont un test réel de la voix Piper, sauté si le modèle est absent).
+
+### Mesuré en réel
+- Chargement de la voix : 1,4 s (une fois au démarrage). Synthèse : 0,27 s pour 6,9 s de parole (CPU).
+- Demande à Opus 5.5 : premier texte à 2,7 s, **FRIDAY commence à parler à 3,7 s**, avant la fin de la réponse de Claude (4,9 s).
+
+### Décisions
+- Voix féminine siwis (cohérente avec FRIDAY) ; `fr_FR-upmc-medium` reste possible via la config.
+- Piper sur CPU : largement assez rapide, le GPU reste libre pour Whisper (phase 4).
+- Un flux audio par phrase plutôt qu'un flux continu : plus simple, tolère le changement de périphérique entre deux phrases ; le court silence entre phrases sonne naturel.
+- « Mr » est prononcé « Mister » (en français, espeak lirait « M R »).
+- Toute nouvelle saisie coupe la parole en cours (le mot « stop » vocal viendra avec le micro).
+
+### Reste
+- Machine à états IDLE → LISTENING → THINKING → SPEAKING et anti-écho : phases 4 et 5.
+
 ## Phase 2 — Commandes locales, routeur, sessions (2026-09-27)
 
 ### Fait

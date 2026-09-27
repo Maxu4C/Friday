@@ -31,7 +31,17 @@ Parlez (ou tapez) naturellement ; ces commandes sont traitées sur votre PC, san
 - **État** : « quel modèle tu utilises ? », « on est dans quel mode ? », « combien de requêtes aujourd'hui ? ».
 - **Contrôle** : « stop », « annule », « répète », « ouvre Claude dans le navigateur ».
 
-Chaque session garde son mode, son modèle et sa conversation. Au redémarrage, FRIDAY reprend la dernière session. Raccourcis clavier : `/aide`. **Ctrl+C** interrompt une réponse.
+Chaque session garde son mode, son modèle et sa conversation. Au redémarrage, FRIDAY reprend la dernière session. Raccourcis clavier : `/aide`.
+
+### Voix
+
+FRIDAY lit ses réponses à voix haute (voix française Piper, 100 % locale), phrase par phrase dès que Claude commence à répondre. Le contenu technique (code, chemins, tableaux) est affiché mais jamais lu.
+
+- **Couper la parole** : Ctrl+C, taper une nouvelle phrase, ou « stop ».
+- **Sans la voix** : `.venv\Scripts\friday chat --muet`, ou `tts.enabled: false` dans `config\friday.yaml`.
+- **Tester la voix** : `.venv\Scripts\friday dis Bonjour`.
+- **Vitesse** : `tts.length_scale` (1.2 = plus lent, 0.9 = plus rapide). **Sortie audio** : `audio.output_device` (nom donné par `friday devices`).
+- Si la voix Piper est absente, FRIDAY utilise la voix de Windows ; relancez `scripts\install.ps1` pour la télécharger.
 
 Les actions de Claude sont journalisées dans `logs\actions.log`.
 

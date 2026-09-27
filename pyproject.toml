@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy>=2.4.6",
+    "piper-tts>=1.8.0",
+    "pyttsx3>=2.99",
     "pyyaml>=6.0.3",
     "sounddevice>=0.5.6",
 ]
@@ -28,11 +30,11 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["sounddevice"]
+module = ["sounddevice", "pyttsx3"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -29,8 +29,11 @@ stt:
   initial_prompt: "Friday, Claude, Claude Code, Haiku, Opus, Fable, session"
 
 tts:
-  engine: piper         # repli automatique : windows_sapi
-  voice: fr_FR-siwis-medium
+  enabled: true           # false : FRIDAY écrit sans parler
+  engine: piper           # piper (voix neuronale locale) | windows_sapi ; repli automatique sur windows_sapi
+  voice: fr_FR-siwis-medium   # ou fr_FR-upmc-medium (python -m piper.download_voices <voix> --download-dir models/piper)
+  models_dir: models/piper
+  length_scale: 1.0       # vitesse : > 1 plus lent, < 1 plus rapide
 
 claude:
   binary: claude
