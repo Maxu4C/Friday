@@ -25,9 +25,14 @@ foreach ($var in 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN') {
 }
 
 Step 'Python 3.12 et dépendances'
-uv python find 3.12 *> $null
-if ($LASTEXITCODE -ne 0) { uv python install 3.12 }
-uv sync
+# Python est installé dans le projet (.python) et non dans AppData : lancé depuis une
+# application empaquetée (MSIX), AppData\Roaming est virtualisé et le Python y serait
+# invisible pour le raccourci du Bureau et le démarrage automatique.
+$env:UV_PYTHON_INSTALL_DIR = Join-Path $root '.python'
+uv python install 3.12
+$python = Get-ChildItem (Join-Path $root '.python') -Recurse -Filter python.exe -Depth 2 |
+    Where-Object { $_.FullName -match 'cpython-3\.12\.\d+' } | Select-Object -First 1 -ExpandProperty FullName
+uv sync --python $python
 
 Step 'Dossiers locaux'
 foreach ($dir in 'data', 'logs', 'models', 'workspace') {

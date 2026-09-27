@@ -1,5 +1,11 @@
 # Journal de bord
 
+## Correctif — raccourci du Bureau et Python (2026-09-27)
+
+- Symptôme : le raccourci du Bureau affichait « No Python at …\AppData\Roaming\uv\python\cpython-3.12.14…\pythonw.exe ».
+- Cause : les commandes de développement sont lancées depuis l'application Claude, empaquetée (MSIX). Windows **virtualise `AppData\Roaming`** pour ces applications : `uv python install` avait écrit Python dans `AppData\Local\Packages\Claude_…\LocalCache\Roaming\…`, visible seulement depuis l'application, pas depuis l'Explorateur ni un raccourci.
+- Correctif : Python est installé **dans le projet** (`.python/`, ignoré par git, via `UV_PYTHON_INSTALL_DIR`), `.venv` recréé dessus ; `install.ps1` fait de même. Le reste était déjà hors de `AppData\Roaming` (modèles dans `models/`, `claude` dans `~\.local\bin`, données dans `data/`).
+
 ## Phase 7 — Interface HUD (2026-09-27)
 
 ### Fait
