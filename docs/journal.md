@@ -1,5 +1,23 @@
 # Journal de bord
 
+## Phase 8 — Démarrage automatique, verrou, reprise, README, import (2026-09-27)
+
+### Fait
+- **Démarrage automatique** : `scripts/autostart.ps1` crée la tâche planifiée Windows « FRIDAY » (ouverture de session de l'utilisateur, délai 30 s, `.venv\Scripts\pythonw.exe -m friday`, sans limite de durée, sans droits administrateur) ; `-Desinstaller` la supprime, `-Etat` l'affiche. Tâche **créée sur ce PC** (annoncée avant, §12.5) et testée : lancement à froid → fenêtre en 4 s, interface et micro prêts ; code de retour 0.
+  - Pourquoi une tâche planifiée plutôt que le dossier Démarrage : ce dossier est dans `AppData\Roaming`, virtualisé pour l'application Claude (MSIX) ; le Planificateur de tâches est un service système, non virtualisé.
+- **Un seul exemplaire** (`friday/adapters/instance.py`) : verrou `msvcrt.locking` sur `data/friday.lock` (Windows le libère seul si FRIDAY plante, pas de verrou orphelin). Un second lancement lit `data/instance.json` (port + secret « control » tiré au hasard à chaque lancement) et appelle `POST /api/show` : la FRIDAY en cours ramène sa fenêtre au premier plan, le second processus sort (code 0, testé en ~1 s). `friday ecoute` prend le même verrou (un seul programme sur le micro et sur Claude).
+  - `/api/show` exige l'en-tête `X-Friday-Control` (comparaison à temps constant) ; un site web ne peut pas l'envoyer sans pré-vol CORS, que le serveur n'accepte pas.
+- **« Chargement… »** : la fenêtre pywebview s'ouvre immédiatement sur une page de chargement, les modèles (voix, Whisper, mot d'activation) se chargent dans le fil de `webview.start(func)`, puis la fenêtre bascule sur l'interface (`load_url`). Si le port est pris par un autre programme, la fenêtre l'explique. `hud_app.py` réécrit en classe `HudApp` (boot protégé par un verrou : l'arrêt attend un chargement en cours).
+- **Arrêt propre** vérifié : `assistant.shutdown()` → `controller.close()` (processus `claude` fermé, registre des sessions enregistré), micro et raccourci libérés, historique enregistré, fichier d'instance supprimé, « À bientôt ».
+- **Historique** : l'historique de l'interface est enregistré dans `data/history.json` (fragments de texte fusionnés, confirmations périmées retirées) à chaque fin de réponse — il survit donc aussi à un arrêt du PC sans quitter FRIDAY — et réaffiché au lancement.
+- **Reprise** : au lancement, `Controller.start()` reprend la dernière session active (mode, modèle, dossier) et l'annonce (déjà en place depuis la phase 3, revérifié par le démarrage automatique).
+- **Import des sessions Claude Code** (optionnel du §5) : `friday importer` liste les sessions récentes de `~/.claude/projects/*/*.jsonl` (**lecture seule**) ; `friday importer <n> [--nom X]` l'ajoute au registre en mode Claude Code, avec son dossier d'origine comme dossier de travail (`--resume` n'est valable que dans le même dossier). Écartées : sessions déjà connues, lancées dans le dossier temporaire, ou scriptées (`turnOrigin` ≠ `human` : `claude -p`, résumés automatiques). L'import exige que FRIDAY soit quittée (elle réécrirait le registre en l'enregistrant) ; la liste fonctionne toujours.
+- **README** complet en français : installation, lancement, démarrage automatique et sa désactivation, micro, mot d'activation, modes, modèles, sessions et import, voix, reconnexion à Claude, commandes, fichiers.
+- 376 tests (15 nouveaux dans `tests/test_lifecycle.py`), ruff et mypy strict verts.
+
+### Remarque
+- Lancé depuis l'application Claude, `claude` hérite de `CLAUDE_CODE_ENTRYPOINT=claude-desktop` ; sans effet (FRIDAY lancée par le raccourci ou la tâche n'en hérite pas).
+
 ## Correctif — raccourci du Bureau et Python (2026-09-27)
 
 - Symptôme : le raccourci du Bureau affichait « No Python at …\AppData\Roaming\uv\python\cpython-3.12.14…\pythonw.exe ».

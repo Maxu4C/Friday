@@ -10,15 +10,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 from collections import deque
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterable
 from pathlib import Path
 from typing import Any, Protocol
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from friday.adapters.instance import CONTROL_HEADER, SHOW_PATH
 from friday.core.assistant import State
 from friday.core.intents import Command
 from friday.ui.protocol import client_action
@@ -45,10 +47,10 @@ class AssistantPort(Protocol):
 class Hub:
     """Fan-out of FRIDAY's messages to every open HUD window (callable from any thread)."""
 
-    def __init__(self) -> None:
+    def __init__(self, history: Iterable[dict[str, Any]] = ()) -> None:
         self._clients: set[WebSocket] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._history: deque[dict[str, Any]] = deque(maxlen=_HISTORY)
+        self._history: deque[dict[str, Any]] = deque(history, maxlen=_HISTORY)
 
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -86,7 +88,10 @@ def create_app(
     token: str,
     port: int,
     models: set[str],
+    control: str | None = None,
+    on_show: Callable[[], None] | None = None,
 ) -> FastAPI:
+    """`on_show` is called when a second FRIDAY launch presents the `control` secret."""
     allowed_origins = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
 
     @contextlib.asynccontextmanager
@@ -100,6 +105,14 @@ def create_app(
     @app.get("/")
     async def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
+
+    @app.post(SHOW_PATH)
+    async def show(request: Request) -> Response:
+        given = request.headers.get(CONTROL_HEADER, "")
+        if on_show is None or not control or not secrets.compare_digest(given, control):
+            return Response(status_code=403)
+        await asyncio.to_thread(on_show)
+        return Response(status_code=204)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

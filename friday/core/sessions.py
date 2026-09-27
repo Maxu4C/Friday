@@ -150,6 +150,44 @@ class SessionRegistry:
         self._current = record.key
         return record
 
+    def import_session(
+        self,
+        name: str,
+        session_id: str,
+        model: str,
+        workspace: str,
+        last_used_at: datetime,
+        summary: str = "",
+    ) -> SessionRecord:
+        """Add a Claude Code session started outside FRIDAY, without switching to it.
+
+        A taken name gets a number ("site 2"); importing twice returns the existing record.
+        """
+        for record in self._records.values():
+            if record.session_id == session_id:
+                return record
+        base = name.strip() or self._auto_name()
+        name, number = base, 1
+        while self._name_taken(name):
+            number += 1
+            name = f"{base} {number}"
+        record = SessionRecord(
+            key=self._new_key(),
+            name=name,
+            mode=Mode.CLAUDE_CODE,  # a terminal session had its tools
+            model=model,
+            workspace=workspace,
+            created_at=last_used_at,
+            last_used_at=last_used_at,
+            session_id=session_id,
+            summary=summary,
+        )
+        self._records[record.key] = record
+        return record
+
+    def has_session_id(self, session_id: str) -> bool:
+        return any(record.session_id == session_id for record in self._records.values())
+
     def activate(self, record: SessionRecord, now: datetime) -> None:
         self._current = record.key
         record.last_used_at = now
@@ -192,8 +230,18 @@ class SessionRegistry:
         ]
         return f"Session {max(numbers, default=0) + 1}"
 
-    def _check_free(self, name: str, ignore: SessionRecord | None = None) -> None:
+    def _name_taken(self, name: str, ignore: SessionRecord | None = None) -> SessionRecord | None:
         wanted = normalize(name)
-        for record in self._records.values():
-            if record is not ignore and normalize(record.name) == wanted:
-                raise SessionNameTakenError(f"Une session s'appelle déjà {record.name}.")
+        return next(
+            (
+                record
+                for record in self._records.values()
+                if record is not ignore and normalize(record.name) == wanted
+            ),
+            None,
+        )
+
+    def _check_free(self, name: str, ignore: SessionRecord | None = None) -> None:
+        taken = self._name_taken(name, ignore)
+        if taken is not None:
+            raise SessionNameTakenError(f"Une session s'appelle déjà {taken.name}.")

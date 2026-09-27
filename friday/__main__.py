@@ -48,7 +48,11 @@ def _hud_headless() -> int:
     return 2 if config is None else run_hud(config, window="none")
 
 
+ALREADY_RUNNING = "FRIDAY est déjà lancée : quittez-la d'abord (icône près de l'horloge)."
+
+
 def _listen_app() -> int:
+    from friday.adapters.instance import InstanceLock
     from friday.voice_app import run_voice_app
 
     config = load()
@@ -56,7 +60,62 @@ def _listen_app() -> int:
         return 2
     if hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
-    return run_voice_app(config, _write)
+    with InstanceLock(config.data_dir / "friday.lock") as lock:
+        if not lock.acquire():
+            print(ALREADY_RUNNING, file=sys.stderr)
+            return 1
+        return run_voice_app(config, _write)
+
+
+def _import_sessions(number: int | None, name: str | None) -> int:
+    """List the Claude Code sessions started outside FRIDAY, or import one (read-only)."""
+    from pathlib import Path
+
+    from friday.adapters.claude_transcripts import scan
+    from friday.adapters.instance import InstanceLock
+    from friday.adapters.json_store import JsonFile
+    from friday.core.sessions import SessionRegistry
+
+    config = load()
+    if config is None:
+        return 2
+    store = JsonFile(config.data_dir / "sessions.json")
+    with InstanceLock(config.data_dir / "friday.lock") as lock:
+        # Importing while FRIDAY runs would be lost: she rewrites the registry when she saves.
+        if number is not None and not lock.acquire():
+            print(ALREADY_RUNNING, file=sys.stderr)
+            return 1
+        registry = SessionRegistry.from_dict(store.load())
+        candidates = [t for t in scan() if not registry.has_session_id(t.session_id)]
+        if number is None:
+            if not candidates:
+                print("Aucune session Claude Code à importer.")
+                return 0
+            print("Sessions Claude Code récentes (lues sans être modifiées) :")
+            for index, transcript in enumerate(candidates, start=1):
+                when = transcript.last_used_at.strftime("%d/%m %H:%M")
+                print(f"  {index:>2}. {when}  {transcript.cwd}")
+                print(f"      « {transcript.first_prompt} »")
+            print('\nImporter : friday importer <numéro> [--nom "nom de la session"]')
+            return 0
+        if not 1 <= number <= len(candidates):
+            print(f"Numéro inconnu : {number} (voir la liste avec friday importer).")
+            return 1
+        transcript = candidates[number - 1]
+        record = registry.import_session(
+            name or Path(transcript.cwd).name,
+            transcript.session_id,
+            model=config.models.complex,
+            workspace=transcript.cwd,
+            last_used_at=transcript.last_used_at,
+            summary=transcript.first_prompt,
+        )
+        store.save(registry.to_dict())
+        print(
+            f"Session « {record.name} » importée (mode Claude Code, dossier {record.workspace}).\n"
+            f"Dites à FRIDAY : « reprends la session {record.name} »."
+        )
+        return 0
 
 
 def _chat(mute: bool, no_mic: bool) -> int:
@@ -176,6 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     say.add_argument("texte", nargs="+")
     commands.add_parser("voix", help="fait écouter les voix disponibles pour choisir")
     commands.add_parser("devices", help="liste les périphériques audio")
+    importer = commands.add_parser(
+        "importer", help="importe une session Claude Code commencée dans un terminal"
+    )
+    importer.add_argument("numero", nargs="?", type=int, help="numéro dans la liste")
+    importer.add_argument("--nom", help="nom de la session dans FRIDAY")
 
     args = parser.parse_args(argv)
     if args.command in (None, "hud"):
@@ -192,6 +256,8 @@ def main(argv: list[str] | None = None) -> int:
         return _say(" ".join(args.texte))
     if args.command == "voix":
         return _voices()
+    if args.command == "importer":
+        return _import_sessions(args.numero, args.nom)
     return 1
 
 

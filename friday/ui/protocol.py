@@ -169,3 +169,18 @@ def _brief(data: dict[str, object], limit: int = 160) -> str:
             text = str(data[key])
             return text if len(text) <= limit else text[: limit - 1] + "…"
     return ""
+
+
+def saved_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The HUD history as kept between launches: consecutive text fragments merged,
+    confirmations dropped (their question died with the previous run)."""
+    kept: list[dict[str, Any]] = []
+    for message in messages:
+        kind = message.get("type")
+        if kind in ("confirm", "stopped", "state", "snapshot"):
+            continue
+        if kind == "delta" and kept and kept[-1].get("type") == "delta":
+            kept[-1] = {"type": "delta", "text": kept[-1]["text"] + str(message.get("text", ""))}
+            continue
+        kept.append(dict(message))
+    return kept
