@@ -21,5 +21,7 @@
 - `--permission-prompt-tool` n'apparaît plus dans l'aide mais est référencé par le nouveau `--permission-prompts host|none` (« host » = l'hôte SDK ou `--permission-prompt-tool`). À tester en phase 6.
 - `--restricted` (nouveau) : retire les outils qui exécutent du code et confine les outils fichiers au dossier de travail. Piste de durcissement pour le mode Claude Code.
 
+- **Périphériques audio désignés par leur nom, jamais par leur indice** (`friday/adapters/audio_io.py`) : les indices `sounddevice` changent dès qu'un casque est branché ou débranché (constaté en phase 0). Le nom est résolu en indice à chaque ouverture : correspondance exacte puis partielle, insensible aux accents et à la casse, préfixe accepté (MME tronque les noms à 31 caractères). Parmi les homonymes, préférence DirectSound (noms complets, rééchantillonnage vers 16 kHz géré par Windows) > MME > WASAPI (exige la fréquence native). Périphérique introuvable → défaut Windows + avertissement dans le journal, sans plantage.
+
 ### Reste
 - Opus 5.5 indisponible tant que Claude Code n'est pas mis à jour en 2.1.280+ (voir `docs/environnement.md`).

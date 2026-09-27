@@ -18,4 +18,4 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 .venv\Scripts\friday devices
 ```
 
-Reporte ensuite l'indice ou le nom du périphérique dans `config\friday.yaml` (`audio.input_device` et `audio.output_device`).
+Copie ensuite le **nom** du périphérique (entre guillemets) dans `config\friday.yaml` (`audio.input_device` et `audio.output_device`). Un extrait du nom suffit, sans se soucier des accents ni des majuscules. Si le périphérique est débranché, FRIDAY utilise celui par défaut de Windows.

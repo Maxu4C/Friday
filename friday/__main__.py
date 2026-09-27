@@ -7,18 +7,18 @@ import sys
 
 
 def _list_devices() -> int:
-    import sounddevice as sd
+    from friday.adapters.audio_io import default_device_name, device_names, query_devices
 
-    default_in, default_out = sd.default.device
-    for index, device in enumerate(sd.query_devices()):
-        hostapi = sd.query_hostapis(device["hostapi"])["name"]
-        channels = []
-        if device["max_input_channels"]:
-            channels.append(f"in:{device['max_input_channels']}")
-        if device["max_output_channels"]:
-            channels.append(f"out:{device['max_output_channels']}")
-        marks = ("*in" if index == default_in else "") + ("*out" if index == default_out else "")
-        print(f"{index:>3}  {device['name']:<55} {hostapi:<22} {' '.join(channels):<12} {marks}")
+    devices = query_devices()
+    sections = (("input", "Micros", "input_device"), ("output", "Sorties", "output_device"))
+    for kind, title, key in sections:
+        default = default_device_name(devices, kind)
+        print(f"{title} (audio.{key}) :")
+        for name in device_names(devices, kind):
+            mark = "   <- défaut Windows" if name == default else ""
+            print(f'  "{name}"{mark}')
+        print()
+    print("Copie un nom entre guillemets dans config\\friday.yaml (null = défaut Windows).")
     return 0
 
 

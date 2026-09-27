@@ -12,8 +12,10 @@ wake_word:
   hotkey: ctrl+alt+f    # push-to-talk global
 
 audio:
-  # null = périphérique par défaut ; sinon un nom (voir `friday devices`).
-  # Préférer le nom à l'indice : les indices changent quand un casque est branché/débranché.
+  # Nom du périphérique tel qu'affiché par `friday devices` (un extrait suffit, accents et
+  # majuscules ignorés), ou null pour le défaut Windows. S'il est débranché, FRIDAY
+  # bascule sur le défaut Windows au lieu de planter.
+  # Exemple : input_device: "Microphone sur casque (2- USB Audio Device)"
   input_device: null
   output_device: null
   sample_rate: 16000
