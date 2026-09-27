@@ -16,6 +16,22 @@ def _write(text: str) -> None:
     sys.stdout.flush()
 
 
+def _hud(browser: bool) -> int:
+    from friday.hud_app import run_hud
+
+    config = load()
+    if config is None:
+        return 2
+    return run_hud(config, window="browser" if browser else "native")
+
+
+def _hud_headless() -> int:
+    from friday.hud_app import run_hud
+
+    config = load()
+    return 2 if config is None else run_hud(config, window="none")
+
+
 def _listen_app() -> int:
     from friday.voice_app import run_voice_app
 
@@ -129,8 +145,13 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(prog="friday", description="FRIDAY, assistant vocal local")
-    commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("ecoute", help="FRIDAY à l'écoute : mot d'activation, raccourci, clavier")
+    commands = parser.add_subparsers(dest="command")
+    hud = commands.add_parser("hud", help="FRIDAY avec son interface (commande par défaut)")
+    hud.add_argument("--navigateur", action="store_true", help="ouvrir dans le navigateur")
+    hud.add_argument(
+        "--sans-fenetre", action="store_true", help="n'ouvrir aucune fenêtre (affiche l'adresse)"
+    )
+    commands.add_parser("ecoute", help="FRIDAY à l'écoute dans le terminal (sans interface)")
     chat = commands.add_parser("chat", help="discute avec FRIDAY au clavier (Entrée = parler)")
     chat.add_argument("--muet", action="store_true", help="réponses écrites seulement")
     chat.add_argument("--sans-micro", action="store_true", help="clavier seulement")
@@ -140,6 +161,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("devices", help="liste les périphériques audio")
 
     args = parser.parse_args(argv)
+    if args.command in (None, "hud"):
+        if getattr(args, "sans_fenetre", False):
+            return _hud_headless()
+        return _hud(getattr(args, "navigateur", False))
     if args.command == "ecoute":
         return _listen_app()
     if args.command == "devices":

@@ -33,7 +33,19 @@ Parlez (ou tapez) naturellement ; ces commandes sont traitées sur votre PC, san
 
 Chaque session garde son mode, son modèle et sa conversation. Au redémarrage, FRIDAY reprend la dernière session. Raccourcis clavier : `/aide`.
 
-### FRIDAY toujours à l'écoute
+### L'interface (HUD)
+
+```powershell
+.venv\Scripts\friday
+```
+
+Une fenêtre s'ouvre : l'orbe indique l'état de FRIDAY (veille, écoute, réflexion, parole), le bandeau du haut permet de changer de **mode** et de **modèle**, le panneau de droite montre les **actions** de Claude Code (avec les boutons **Oui / Non** quand une confirmation est nécessaire), le **contenu technique** et vos **sessions** (nouvelle, reprendre, renommer, oublier). En bas : bouton **Parler**, champ de texte, **Micro** (couper/réactiver) et **Stop** (ou la touche Échap).
+
+- Fermer la fenêtre ne quitte pas FRIDAY : elle reste dans la zone de notification (icône en forme d'anneau, près de l'horloge). Clic droit sur l'icône : Afficher/masquer, Couper le micro, **Quitter FRIDAY**.
+- `friday hud --navigateur` : l'interface dans votre navigateur plutôt que dans une fenêtre.
+- L'interface n'est accessible que depuis votre PC (adresse 127.0.0.1, clé secrète renouvelée à chaque lancement).
+
+### FRIDAY toujours à l'écoute, sans interface
 
 ```powershell
 .venv\Scripts\friday ecoute

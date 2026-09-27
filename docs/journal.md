@@ -1,5 +1,26 @@
 # Journal de bord
 
+## Phase 7 — Interface HUD (2026-09-27)
+
+### Fait
+- **`friday`** (sans argument) lance FRIDAY avec son interface : fenêtre native **pywebview** (WebView2), repli sur le navigateur par défaut ; `friday hud --navigateur` ; `friday hud --sans-fenetre` (affiche l'adresse). `friday ecoute` reste la version terminal.
+- **Serveur FastAPI + WebSocket lié à 127.0.0.1 uniquement**, avec un **jeton aléatoire renouvelé à chaque lancement** exigé pour ouvrir le WebSocket, et vérification de l'**Origin** : aucune page web ouverte dans un navigateur ne peut piloter FRIDAY via localhost. Messages malformés ou inconnus ignorés ; modèles et modes validés côté serveur.
+- **HUD** (HTML/CSS/JS pur, aucune ressource externe, fonctionne hors ligne, aucun visuel protégé) : orbe animé par état (veille, écoute, réflexion, parole ; animations coupées si « réduire les animations » est activé) ; bandeau d'état (session, sélecteurs Mode et Modèle avec badge « auto »/« verrouillé », dossier de travail) ; conversation en direct (réponse en streaming, blocs `[AFFICHER]` retirés du fil) ; zone **Actions** (outils utilisés, refus, **demandes de confirmation avec boutons Oui/Non** et « Oui, confirme » pour les actions dangereuses) ; zone **Affichage** (blocs techniques rendus : code, titres, listes) ; **panneau Sessions** (Nouvelle, Reprendre, Renommer, Oublier) ; requêtes du jour par modèle et quota ; indicateurs micro, Whisper, voix, Claude, liaison ; barre du bas : Parler (push-to-talk), champ texte, Micro (couper/réactiver), Stop (et touche Échap). Tout texte reçu est échappé avant affichage.
+- **Icône dans la zone de notification** (pystray, dessinée à l'exécution) : Afficher/masquer, Couper le micro (coché si coupé), Quitter. Fermer la fenêtre la masque : FRIDAY reste active.
+- Une fenêtre qui se (re)connecte reçoit l'état complet et les 400 derniers messages.
+- `friday/runtime.py` assemble voix, micro, reconnaissance, mot d'activation et raccourci pour le terminal comme pour le HUD (chaque partie peut échouer sans empêcher le reste). L'assistant accepte des commandes de l'interface (`execute`) et signale les blocs `[AFFICHER]` (`ShowBlock`), voix activée ou non.
+- 361 tests, dont le serveur (jeton absent ou faux, page web étrangère, autre port local → refus 4403 ; session complète : snapshot, historique, texte, push-to-talk, modèle, commande inconnue ignorée, stop).
+
+### Vérifié en réel
+- `friday hud --sans-fenetre` ouvert dans un navigateur : connexion, session et sélecteurs remplis ; « modèle automatique » tapé → badge « auto » ; question à Claude → orbe orange (réflexion), réponse en streaming, orbe bleu (parole), formule du bloc `[AFFICHER]` rendue dans la zone Affichage, quota affiché.
+
+### Incident corrigé
+- Un ancien test appelait `friday` sans argument pour vérifier une erreur ; depuis que `friday` seul lance le HUD, ce test **a démarré FRIDAY pour de vrai** (micro ouvert) et bloqué la suite. Le micro a alors capté « passez en mode conversation » à 21 h 01 et changé le mode de la session en cours. Test remplacé (commande inconnue), aucun processus résiduel ; les suites de tests sont désormais lancées avec une limite de temps.
+
+### Reste
+- Fenêtre native et icône de notification à vérifier sur votre bureau (je ne vois pas votre écran).
+- Démarrage automatique, verrou d'instance unique, import des sessions existantes : phase 8.
+
 ## Phase 6 — Permissions et confirmations vocales (2026-09-27)
 
 ### Fait

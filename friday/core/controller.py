@@ -14,7 +14,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from friday.core.events import BrainEvent, Mode, PermissionRequest, TextDelta, TurnCompleted
+from friday.core.events import (
+    BrainEvent,
+    Mode,
+    PermissionRequest,
+    RateLimitStatus,
+    TextDelta,
+    TurnCompleted,
+)
 from friday.core.intents import (
     AskMode,
     AskModel,
@@ -214,6 +221,24 @@ class Controller:
     @property
     def awaiting_answer(self) -> bool:
         return self._pending is not None
+
+    @property
+    def model_choices(self) -> list[tuple[str, str]]:
+        """(alias, label) of the models the interface may offer."""
+        return list(self._settings.model_labels.items())
+
+    @property
+    def active_model(self) -> str:
+        return self._brain.state.model
+
+    def usage_today(self) -> dict[str, int]:
+        """Requests sent to Claude today, per model label."""
+        counts = self._usage.day(self._now().date())
+        return {self._label(model): n for model, n in counts.most_common()}
+
+    @property
+    def rate_limit(self) -> RateLimitStatus | None:
+        return self._brain.last_rate_limit
 
     def start(self) -> Iterator[Output]:
         """Reopen the last active session (or create the first one) and announce it."""

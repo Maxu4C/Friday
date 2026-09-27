@@ -57,7 +57,8 @@ def test_config_refuses_unknown_mode() -> None:
         parse_config(raw)
 
 
-def test_cli_requires_a_command() -> None:
+def test_cli_rejects_an_unknown_command() -> None:
+    # Note: `friday` without a command starts the HUD, so it must never be called here.
     with pytest.raises(SystemExit) as exit_info:
-        main([])
+        main(["commande-inconnue"])
     assert exit_info.value.code == 2

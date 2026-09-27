@@ -12,11 +12,15 @@ import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from friday.core.controller import ConfirmAction, Controller, Output, Say
+from friday.core.events import TextDelta, TurnCompleted
+from friday.core.intents import Command
 from friday.core.messages import HEARD_NOTHING, NOT_UNDERSTOOD
 from friday.core.narrator import Narrator
 from friday.core.ports import Ears
+from friday.core.speech import Display, Segment, SpeechStream
 from friday.core.voice import SpeechRouter
 
 logger = logging.getLogger(__name__)
@@ -42,7 +46,14 @@ class UserSaid:
     spoken: bool
 
 
-AssistantEvent = Output | StateEvent | UserSaid
+@dataclass(frozen=True)
+class ShowBlock:
+    """Technical content from an [AFFICHER] block, for the screen only."""
+
+    text: str
+
+
+AssistantEvent = Output | StateEvent | UserSaid | ShowBlock
 
 
 class Assistant:
@@ -59,7 +70,8 @@ class Assistant:
         self._ears = ears
         self._narrator = narrator
         self._speech = SpeechRouter(narrator) if narrator is not None else None
-        self._queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self._blocks = SpeechStream()  # finds [AFFICHER] blocks, voice or not
+        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._lock = threading.Lock()
         self._state = State.IDLE
         self._busy = False  # a request is being handled (Claude may still be answering)
@@ -87,6 +99,10 @@ class Assistant:
         if self._state in (State.THINKING, State.SPEAKING):
             self.stop()
         self._queue.put(("wake", source))
+
+    def execute(self, command: Command) -> None:
+        """Run a system command chosen in the interface (mode, model, session...)."""
+        self._queue.put(("command", command))
 
     def submit_text(self, text: str) -> None:
         confirmation = self._confirmation
@@ -123,6 +139,8 @@ class Assistant:
             try:
                 if kind == "wake":
                     self._listen()
+                elif kind == "command":
+                    self._handle(self._controller.execute(value), spoken=False)
                 else:
                     self._display(UserSaid(value, spoken=False))
                     self._respond(value, spoken=False)
@@ -151,6 +169,7 @@ class Assistant:
     def _respond(self, text: str, *, spoken: bool) -> None:
         if self._speech is not None:
             self._speech.reset()
+        self._blocks = SpeechStream()
         self._handle(self._controller.handle(text), spoken=spoken)
 
     def _handle(self, outputs: Iterator[Output], *, spoken: bool) -> None:
@@ -200,7 +219,15 @@ class Assistant:
     def _emit(self, output: Output) -> None:
         self._display(output)
         if self._speech is not None:
-            self._speech.handle(output)  # display blocks are already shown with the text
+            self._speech.handle(output)
+        segments: list[Segment] = []
+        if isinstance(output, TextDelta):
+            segments = self._blocks.feed(output.text)
+        elif isinstance(output, TurnCompleted):
+            segments = self._blocks.flush()
+        for segment in segments:
+            if isinstance(segment, Display) and segment.text.strip():
+                self._display(ShowBlock(segment.text))
 
     # -- state ------------------------------------------------------------------------
 

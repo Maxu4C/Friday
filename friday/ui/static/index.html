@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FRIDAY</title>
+  <link rel="stylesheet" href="/static/hud.css">
+</head>
+<body data-state="idle">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">F.R.I.D.A.Y.</span>
+    </div>
+    <div class="status">
+      <div class="field">
+        <span class="field-label">Session</span>
+        <span class="field-value" id="session-name">—</span>
+      </div>
+      <label class="field">
+        <span class="field-label">Mode</span>
+        <select id="mode-select" aria-label="Mode">
+          <option value="claude">Claude — conversation</option>
+          <option value="claude_code">Claude Code — actions</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Modèle <span class="badge" id="model-badge">auto</span></span>
+        <select id="model-select" aria-label="Modèle"></select>
+      </label>
+      <div class="field field-wide">
+        <span class="field-label">Dossier</span>
+        <span class="field-value mono" id="workspace" title="">—</span>
+      </div>
+    </div>
+    <ul class="indicators" aria-label="Indicateurs">
+      <li id="ind-mic" title="Micro">Micro</li>
+      <li id="ind-whisper" title="Reconnaissance vocale">Whisper</li>
+      <li id="ind-voice" title="Synthèse vocale">Voix</li>
+      <li id="ind-claude" title="Claude Code">Claude</li>
+      <li id="ind-link" class="off" title="Connexion à FRIDAY">Liaison</li>
+    </ul>
+  </header>
+
+  <main class="layout">
+    <section class="core" aria-label="FRIDAY">
+      <div class="orb-wrap">
+        <div class="orb" aria-hidden="true">
+          <div class="ring ring-1"></div>
+          <div class="ring ring-2"></div>
+          <div class="ring ring-3"></div>
+          <div class="orb-core"></div>
+        </div>
+        <p class="orb-label" id="state-label" role="status">En veille</p>
+        <p class="orb-hint" id="wake-hint"></p>
+      </div>
+      <div class="conversation" id="conversation" aria-live="polite"></div>
+    </section>
+
+    <aside class="side">
+      <section class="panel" aria-labelledby="actions-title">
+        <h2 id="actions-title">Actions</h2>
+        <div id="confirm" class="confirm" hidden>
+          <p class="confirm-question" id="confirm-question"></p>
+          <pre class="confirm-detail mono" id="confirm-detail"></pre>
+          <div class="confirm-buttons">
+            <button class="btn btn-yes" id="confirm-yes">Oui</button>
+            <button class="btn btn-no" id="confirm-no">Non</button>
+          </div>
+        </div>
+        <ol class="actions" id="actions"></ol>
+      </section>
+
+      <section class="panel panel-grow" aria-labelledby="display-title">
+        <h2 id="display-title">Affichage</h2>
+        <div class="display" id="display"><p class="empty">Le contenu technique s'affichera ici.</p></div>
+      </section>
+
+      <section class="panel" aria-labelledby="sessions-title">
+        <div class="panel-head">
+          <h2 id="sessions-title">Sessions</h2>
+          <button class="btn btn-small" id="session-new">Nouvelle</button>
+        </div>
+        <ul class="sessions" id="sessions"></ul>
+        <div class="usage" id="usage"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="inputbar">
+    <button class="btn btn-ptt" id="ptt" title="Parler (Ctrl+Alt+F)">
+      <span class="ptt-icon" aria-hidden="true"></span><span>Parler</span>
+    </button>
+    <form id="text-form" class="text-form">
+      <input id="text-input" type="text" autocomplete="off" placeholder="Écrivez à FRIDAY…" aria-label="Message">
+      <button class="btn" type="submit">Envoyer</button>
+    </form>
+    <button class="btn btn-mute" id="mute" title="Couper ou réactiver le micro">Micro</button>
+    <button class="btn btn-stop" id="stop" title="Couper la parole et interrompre">Stop</button>
+  </footer>
+
+  <script src="/static/hud.js"></script>
+</body>
+</html>
