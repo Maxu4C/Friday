@@ -23,5 +23,4 @@
 
 - **Périphériques audio désignés par leur nom, jamais par leur indice** (`friday/adapters/audio_io.py`) : les indices `sounddevice` changent dès qu'un casque est branché ou débranché (constaté en phase 0). Le nom est résolu en indice à chaque ouverture : correspondance exacte puis partielle, insensible aux accents et à la casse, préfixe accepté (MME tronque les noms à 31 caractères). Parmi les homonymes, préférence DirectSound (noms complets, rééchantillonnage vers 16 kHz géré par Windows) > MME > WASAPI (exige la fréquence native). Périphérique introuvable → défaut Windows + avertissement dans le journal, sans plantage.
 
-### Reste
-- Opus 5.5 indisponible tant que Claude Code n'est pas mis à jour en 2.1.280+ (voir `docs/environnement.md`).
+- **Claude Code mis à jour en 2.1.283** (`claude update`, à la demande de l'utilisateur) : l'alias `opus` donne désormais Opus 5.5 (`claude-opus-5-5`). Les flags ci-dessus ont été relevés sur 2.1.272 ; ils seront revérifiés en phase 1.

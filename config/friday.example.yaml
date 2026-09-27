@@ -45,9 +45,7 @@ models:
   complex: opus
   available:
     haiku: { label: "Haiku 4.5", aliases: ["haiku", "aïcou", "aiku"] }
-    # L'alias "opus" donne claude-opus-5 sur Claude Code 2.1.272 ; Opus 5.5 (claude-opus-5-5)
-    # exige Claude Code >= 2.1.280 (`claude update`).
-    opus: { label: "Opus 5", aliases: ["opus", "opus 5", "opus cinq"] }
+    opus: { label: "Opus 5.5", aliases: ["opus", "opus 5.5", "opus cinq cinq"] }
     fable: { label: "Fable 5.1", aliases: ["fable", "fable 5.1", "fable cinq un"] }
 
 router:

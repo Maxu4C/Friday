@@ -14,7 +14,7 @@ Relevé du 2026-09-27.
 
 | Vérification | Résultat |
 |---|---|
-| `claude --version` | 2.1.272 (Claude Code) |
+| `claude --version` | 2.1.283 (Claude Code), mis à jour depuis 2.1.272 |
 | `claude auth status` | connecté, `authMethod: claude.ai`, `subscriptionType: max` (et non Pro) |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` | non définies |
 | `claude -p "Réponds uniquement : OK" --output-format json` | OK : `result: "OK"`, `session_id` présent, `is_error: false`, modèle par défaut `claude-opus-5`. (Dans le bac à sable de la session de développement : échec `Failed to refresh OAuth token` ; hors bac à sable : OK.) |
@@ -24,11 +24,13 @@ Relevé du 2026-09-27.
 | Demandé | Modèle réellement utilisé | Statut |
 |---|---|---|
 | `--model haiku` | `claude-haiku-4-5-20251001` | ✅ |
-| `--model opus` | `claude-opus-5` | ✅ (Opus 5, pas 5.5) |
+| `--model opus` | `claude-opus-5-5` | ✅ |
+| `--model claude-opus-5-5` | `claude-opus-5-5` | ✅ |
 | `--model fable` | `claude-fable-5-1` | ✅ |
-| `--model claude-opus-5-5` | — | ❌ `Claude Code 2.1.272 does not support this model; version 2.1.280 or newer is required` |
 
-Proposés par FRIDAY : **haiku, opus (Opus 5), fable**. Opus 5.5 sera ajouté après `claude update`.
+Proposés par FRIDAY : **haiku (Haiku 4.5), opus (Opus 5.5), fable (Fable 5.1)**.
+
+Historique : sur Claude Code 2.1.272, `opus` donnait `claude-opus-5` et `claude-opus-5-5` était refusé (« version 2.1.280 or newer is required »). Mis à jour vers **2.1.283** avec `claude update` le 2026-09-27.
 
 ## Système
 
