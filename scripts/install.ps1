@@ -55,7 +55,14 @@ Step 'Reconnaissance vocale (Whisper large-v3-turbo, ~1,6 Go)'
 $whisper = 'large-v3-turbo'   # doit correspondre à stt.model dans config\friday.yaml
 & (Join-Path $root '.venv\Scripts\python.exe') -c "from friday.adapters.stt_faster_whisper import download; from pathlib import Path; download('$whisper', Path(r'$root\models\whisper'))"
 # Le détecteur de parole Silero est fourni avec faster-whisper (aucun téléchargement).
-# À venir : phase 5 (openWakeWord).
+
+Step "Mot d'activation (openWakeWord « hey Jarvis », quelques Mo)"
+$wakeDir = Join-Path $root 'models\openwakeword'
+if (Test-Path (Join-Path $wakeDir 'hey_jarvis_v0.1.onnx')) {
+    Write-Host 'Modèle hey_jarvis déjà présent.'
+} else {
+    & (Join-Path $root '.venv\Scripts\python.exe') -c "from friday.adapters.wakeword_openwakeword import download; from pathlib import Path; download(Path(r'$wakeDir'))"
+}
 
 Step 'Périphériques audio disponibles'
 & (Join-Path $root '.venv\Scripts\friday.exe') devices

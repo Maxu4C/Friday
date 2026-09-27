@@ -100,6 +100,11 @@ class MuteMic:
 
 
 @dataclass(frozen=True)
+class UnmuteMic:
+    pass
+
+
+@dataclass(frozen=True)
 class OpenClaudeWeb:
     pass
 
@@ -107,7 +112,7 @@ class OpenClaudeWeb:
 Command = (
     SetModel | AutoModel | SetMode | NewSession | ResumeSession | ListSessions | RenameSession
     | ForgetSession | CurrentSession | AskModel | AskMode | AskUsage | Stop | Cancel | Repeat
-    | MuteMic | OpenClaudeWeb
+    | MuteMic | UnmuteMic | OpenClaudeWeb
 )  # fmt: skip
 
 
@@ -332,6 +337,13 @@ class IntentParser:
             s,
         ):
             return MuteMic()
+        if re.fullmatch(
+            r"(?:reactive[rsz]?|reactivez|active[rsz]?|activez|rallume[rsz]?|rallumez|"
+            r"allume[rsz]?|allumez|remets|remettez|ouvre[sz]?|ouvrez) "
+            r"(?:le |ton |votre |ce )?micro(?:phone)?",
+            s,
+        ):
+            return UnmuteMic()
         if re.fullmatch(
             r"(?:ouvre[rsz]?|ouvrez|lance[rsz]?|lancez|affiche[rsz]?|affichez) "
             r"(?:le site (?:de )?|l appli (?:de )?)?claude(?: ai)?"

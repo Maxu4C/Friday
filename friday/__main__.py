@@ -5,186 +5,47 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from friday.adapters.brain_claude_code import ClaudeCodeBrain
-    from friday.config import FridayConfig
-    from friday.core.controller import Controller
-    from friday.core.narrator import Narrator
-    from friday.core.ports import Ears
+from friday.factory import create_controller, create_ears, create_narrator, load
 
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+logger = logging.getLogger(__name__)
 
 
-def _setup_logging(config: FridayConfig) -> None:
-    from friday.config import PROJECT_ROOT
-
-    log_dir = PROJECT_ROOT / "logs"
-    log_dir.mkdir(exist_ok=True)
-
-    def handler(name: str) -> RotatingFileHandler:
-        rotating = RotatingFileHandler(
-            log_dir / name, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
-        )
-        rotating.setFormatter(logging.Formatter(LOG_FORMAT))
-        return rotating
-
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler("friday.log"))
-    actions = logging.getLogger("friday.actions")
-    actions.addHandler(handler("actions.log"))
-    actions.propagate = False
+def _write(text: str) -> None:
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
-def create_brain(config: FridayConfig) -> ClaudeCodeBrain:
-    """Composition root: wire the Claude Code adapter from the configuration."""
-    from friday.adapters.brain_claude_code import BrainSettings, ClaudeCodeBrain
-    from friday.core.ports import SessionState
+def _listen_app() -> int:
+    from friday.voice_app import run_voice_app
 
-    claude = config.claude
-    settings = BrainSettings(
-        binary=claude.binary,
-        workspace=claude.workspace,
-        runtime_dir=config.data_dir / "runtime",
-        persona=claude.persona_file.read_text(encoding="utf-8"),
-        user_names=config.user_names,
-        code_tools=claude.code_tools,
-        allowed_tools=claude.allowed_tools,
-        confirm_tools=claude.confirm_tools,
-        request_timeout=claude.request_timeout_seconds,
-    )
-    # Placeholder until Controller.start() loads the last active session.
-    state = SessionState(mode=claude.default_mode, model=config.models.complex, name="Session 1")
-    return ClaudeCodeBrain(settings, state)
-
-
-def create_controller(config: FridayConfig) -> Controller:
-    from friday.adapters.json_store import JsonFile
-    from friday.core.controller import Controller, ControllerSettings
-    from friday.core.intents import IntentParser
-    from friday.core.router import Router
-
-    models = config.models
-    parser = IntentParser({alias: info.spoken for alias, info in models.available.items()})
-    settings = ControllerSettings(
-        model_labels={alias: info.label for alias, info in models.available.items()},
-        simple_model=models.simple,
-        complex_model=models.complex,
-        default_mode=config.claude.default_mode,
-        workspace=config.claude.workspace,
-    )
-    return Controller(
-        create_brain(config),
-        parser,
-        Router(config.router),
-        settings,
-        JsonFile(config.data_dir / "sessions.json"),
-        JsonFile(config.data_dir / "usage.json"),
-    )
-
-
-def create_narrator(config: FridayConfig) -> Narrator:
-    """Piper voice, or the Windows voice if Piper cannot be loaded."""
-    from friday.adapters.audio_io import SoundDevicePlayer
-    from friday.adapters.tts_piper import PiperTTS, VoiceStyle
-    from friday.adapters.tts_windows_sapi import WindowsSapiTTS
-    from friday.core.narrator import Narrator
-    from friday.core.ports import TextToSpeech
-
-    tts: TextToSpeech
-    if config.tts.engine == "piper":
-        style = VoiceStyle(
-            length_scale=config.tts.length_scale,
-            noise_scale=config.tts.noise_scale,
-            noise_w_scale=config.tts.noise_w_scale,
-            volume=config.tts.volume,
-            softness=config.tts.softness,
-            speaker=config.tts.speaker,
-        )
-        try:
-            tts = PiperTTS(config.tts.models_dir, config.tts.voice, style)
-        except Exception as exc:  # missing model, onnxruntime problem...
-            logging.getLogger(__name__).warning("Piper unavailable (%s), using SAPI", exc)
-            print(f"Voix Piper indisponible ({exc}) : voix Windows utilisée.", file=sys.stderr)
-            tts = WindowsSapiTTS()
-    else:
-        tts = WindowsSapiTTS()
-    return Narrator(tts, SoundDevicePlayer(config.audio.output_device))
-
-
-def create_ears(config: FridayConfig) -> Ears:
-    """Microphone + voice activity detection + Whisper speech recognition."""
-    from friday.adapters.audio_io import MicrophoneRecorder, SoundDevicePlayer
-    from friday.adapters.stt_faster_whisper import FasterWhisperSTT
-    from friday.adapters.vad import EnergyVAD, SileroVAD
-    from friday.adapters.voice_input import VoiceInput
-    from friday.core.endpointing import EndpointSettings
-    from friday.core.ports import VoiceActivityDetector
-
-    audio, stt = config.audio, config.stt
-    vad: VoiceActivityDetector
-    try:
-        vad = SileroVAD() if audio.vad == "silero" else EnergyVAD()
-    except Exception as exc:
-        logging.getLogger(__name__).warning("Silero VAD unavailable (%s), using energy", exc)
-        vad = EnergyVAD()
-    settings = EndpointSettings(
-        threshold=audio.vad_threshold,
-        start_timeout=audio.listen_timeout_seconds,
-        end_silence=audio.end_silence_seconds,
-        max_seconds=audio.max_listen_seconds,
-    )
-    recognizer = FasterWhisperSTT(
-        stt.model,
-        stt.models_dir,
-        device=stt.device,
-        compute_type=stt.compute_type,
-        initial_prompt=stt.initial_prompt,
-        beam_size=stt.beam_size,
-    )
-    cues = SoundDevicePlayer(audio.output_device) if audio.cues else None
-    return VoiceInput(MicrophoneRecorder(audio.input_device, vad, settings), recognizer, cues)
-
-
-def _load() -> FridayConfig | None:
-    from friday.config import ConfigError, load_config
-
-    try:
-        config = load_config()
-    except ConfigError as exc:
-        print(f"Configuration invalide : {exc}", file=sys.stderr)
-        return None
-    _setup_logging(config)
-    return config
+    config = load()
+    if config is None:
+        return 2
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
+    return run_voice_app(config, _write)
 
 
 def _chat(mute: bool, no_mic: bool) -> int:
     from friday.chat import ChatSession
 
-    config = _load()
+    config = load()
     if config is None:
         return 2
     if hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
-
-    def write(text: str) -> None:
-        sys.stdout.write(text)
-        sys.stdout.flush()
-
     narrator = None if mute or not config.tts.enabled else create_narrator(config)
     ears = None
     if not no_mic:
-        write("Chargement de la reconnaissance vocale…\n")
+        _write("Chargement de la reconnaissance vocale…\n")
         try:
             ears = create_ears(config)
         except Exception as exc:
-            logging.getLogger(__name__).exception("Speech recognition unavailable")
-            write(f"Reconnaissance vocale indisponible ({exc}) : clavier seulement.\n")
+            logger.exception("Speech recognition unavailable")
+            _write(f"Reconnaissance vocale indisponible ({exc}) : clavier seulement.\n")
     session = ChatSession(
-        create_controller(config), write=write, read=input, narrator=narrator, ears=ears
+        create_controller(config), write=_write, read=input, narrator=narrator, ears=ears
     )
     return session.run()
 
@@ -212,7 +73,7 @@ def _voices() -> int:
     from friday.adapters.audio_io import SoundDevicePlayer
     from friday.adapters.tts_piper import PiperTTS, VoiceStyle
 
-    config = _load()
+    config = load()
     if config is None:
         return 2
     tts = config.tts
@@ -234,7 +95,7 @@ def _voices() -> int:
 
 
 def _say(text: str) -> int:
-    config = _load()
+    config = load()
     if config is None:
         return 2
     narrator = create_narrator(config)
@@ -269,15 +130,18 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="friday", description="FRIDAY, assistant vocal local")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("devices", help="liste les périphériques audio")
-    chat = commands.add_parser("chat", help="discute avec FRIDAY au clavier")
+    commands.add_parser("ecoute", help="FRIDAY à l'écoute : mot d'activation, raccourci, clavier")
+    chat = commands.add_parser("chat", help="discute avec FRIDAY au clavier (Entrée = parler)")
     chat.add_argument("--muet", action="store_true", help="réponses écrites seulement")
     chat.add_argument("--sans-micro", action="store_true", help="clavier seulement")
     say = commands.add_parser("dis", help="fait prononcer un texte à FRIDAY (test de la voix)")
     say.add_argument("texte", nargs="+")
     commands.add_parser("voix", help="fait écouter les voix disponibles pour choisir")
+    commands.add_parser("devices", help="liste les périphériques audio")
 
     args = parser.parse_args(argv)
+    if args.command == "ecoute":
+        return _listen_app()
     if args.command == "devices":
         return _list_devices()
     if args.command == "chat":

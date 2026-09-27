@@ -1,5 +1,30 @@
 # Journal de bord
 
+## Phase 5 — Mot d'activation, anti-écho, écoute permanente (2026-09-27)
+
+### Fait
+- **openWakeWord 0.6** (gratuit, hors ligne, CPU, inférence ONNX) avec le modèle pré-entraîné **« hey Jarvis »** (`models/openwakeword/`, quelques Mo, téléchargés une fois depuis les versions officielles GitHub du projet). Seuil configurable (`wake_word.threshold`). Tout modèle `.onnx` déposé dans ce dossier peut servir (« Friday » en phase 10).
+- `friday ecoute` : FRIDAY **toujours à l'écoute**. Déclencheurs : mot d'activation, **raccourci global Ctrl+Alt+F** (pynput, fonctionne même fenêtre non active et micro coupé), touche Entrée, ou demande tapée au clavier. `/stop` ou Ctrl+C coupent la parole ; Ctrl+C au repos quitte.
+- `friday/core/assistant.py` : **machine à états IDLE → LISTENING → THINKING → SPEAKING → IDLE**, déclencheurs mis en file d'attente depuis n'importe quel fil, « stop » immédiat (interrompt Claude et la voix). Quand FRIDAY pose une question après une demande orale (« Voulez-vous passer en mode Claude Code ? »), elle écoute la réponse **sans qu'il faille redire le mot d'activation**.
+- `friday/adapters/microphone.py` : **un seul flux micro permanent** partagé entre le mot d'activation et l'enregistrement de la demande (aucun mot perdu entre les deux) ; réouverture automatique si le micro disparaît (casque débranché).
+- `friday/core/wake.py` — **anti-écho** : le détecteur n'est pas alimenté pendant l'écoute d'une demande ; 0,6 s de surdité après que FRIDAY a fini de parler (écho des haut-parleurs) ; audio accumulé pendant les pauses jeté avant de reprendre. **Interruption vocale fiable** (`wake_word.barge_in`) : dire le mot d'activation pendant que FRIDAY parle ou réfléchit la coupe et l'écoute — c'est le « stop » vocal robuste (FRIDAY ne prononce jamais « hey Jarvis »), puis « stop », « annule » ou une nouvelle demande.
+- Retour immédiat au réveil : carillon d'écoute joué avant même la transcription (l'orbe animée viendra avec le HUD).
+- Nouvelle commande « réactive le micro » (« coupe le micro » désactive le mot d'activation ; le raccourci reste actif).
+- `friday/console.py` (affichage terminal partagé) et `friday/core/voice.py` (voix des sorties du contrôleur) : `friday chat` et `friday ecoute` utilisent le même code. `friday/factory.py` regroupe les fabriques.
+- 281 tests.
+
+### Mesuré / vérifié
+- Détecteur réel : « Hé, Jarvisse » prononcé par Piper → 0,75 (détecté) ; phrases ordinaires → 0,00.
+- `friday ecoute` démarre (voix, micro partagé, mot d'activation, Whisper sur GPU, raccourci) et répond, en 7 s de bout en bout.
+
+### Décisions
+- « stop » vocal pendant la parole = mot d'activation puis commande : transcrire tout ce qu'entend le micro pendant que FRIDAY parle capterait sa propre voix sur des haut-parleurs (écho) ; le mot d'activation est, lui, fiable.
+- Le micro reste ouvert en permanence mais **seul** le détecteur local l'analyse au repos ; rien n'est envoyé à Claude sans mot d'activation, raccourci ou saisie (aucune boucle automatique).
+
+### Reste
+- Test de faux positifs avec musique ou vidéo en fond : à faire avec vous (je ne peux pas diffuser de son dans votre pièce et écouter en même temps).
+- Modèle « Friday » personnalisé : phase 10.
+
 ## Phase 4 — Reconnaissance vocale, push-to-talk (2026-09-27)
 
 ### Fait

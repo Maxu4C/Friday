@@ -12,7 +12,7 @@ import queue
 import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from friday.core.endpointing import Endpoint, Endpointer, EndpointSettings
 from friday.core.ports import AudioClip, VoiceActivityDetector
@@ -193,8 +193,12 @@ class MicrophoneRecorder:
                 logger.debug("Microphone status: %s", status)
             frames.put(bytes(data))
 
-        self._vad.reset()
-        endpointer = Endpointer(self._settings)
+        def next_frame(timeout: float) -> bytes | None:
+            try:
+                return frames.get(timeout=timeout)
+            except queue.Empty:
+                return None
+
         with sd.RawInputStream(
             samplerate=self.SAMPLE_RATE,
             blocksize=self.FRAME_SAMPLES,
@@ -203,18 +207,56 @@ class MicrophoneRecorder:
             device=device,
             callback=on_audio,
         ):
-            while not cancelled():
-                try:
-                    frame = frames.get(timeout=2)
-                except queue.Empty:
-                    logger.warning("No audio from the microphone")
-                    return None
-                state = endpointer.push(frame, self._vad.probability(frame))
-                if state is Endpoint.DONE:
-                    return AudioClip(endpointer.audio(), self.SAMPLE_RATE)
-                if state is Endpoint.NO_SPEECH:
-                    return None
-        return None
+            return record_utterance(next_frame, self._vad, self._settings, cancelled)
+
+
+class FrameSource(Protocol):
+    def get(self, timeout: float) -> bytes | None: ...
+
+    def close(self) -> None: ...
+
+
+class SharedMicrophoneRecorder:
+    """Records from the always-open microphone (see adapters/microphone.py)."""
+
+    def __init__(
+        self,
+        subscribe: Callable[[], FrameSource],
+        vad: VoiceActivityDetector,
+        settings: EndpointSettings,
+    ) -> None:
+        self._subscribe = subscribe
+        self._vad = vad
+        self._settings = settings
+
+    def record(self, cancelled: Callable[[], bool] = lambda: False) -> AudioClip | None:
+        source = self._subscribe()
+        try:
+            return record_utterance(source.get, self._vad, self._settings, cancelled)
+        finally:
+            source.close()
+
+
+def record_utterance(
+    next_frame: Callable[[float], bytes | None],
+    vad: VoiceActivityDetector,
+    settings: EndpointSettings,
+    cancelled: Callable[[], bool] = lambda: False,
+) -> AudioClip | None:
+    """Read 512-sample frames until the utterance ends; None if nobody spoke."""
+    vad.reset()
+    endpointer = Endpointer(settings)
+    while not cancelled():
+        frame = next_frame(2.0)
+        if frame is None:
+            logger.warning("No audio from the microphone")
+            return None
+        state = endpointer.push(frame, vad.probability(frame))
+        if state is Endpoint.DONE:
+            return AudioClip(endpointer.audio(), MicrophoneRecorder.SAMPLE_RATE)
+        if state is Endpoint.NO_SPEECH:
+            return None
+    return None
 
 
 def default_device_name(devices: Sequence[AudioDevice], kind: Kind) -> str | None:

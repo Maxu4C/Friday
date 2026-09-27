@@ -33,7 +33,20 @@ Parlez (ou tapez) naturellement ; ces commandes sont traitées sur votre PC, san
 
 Chaque session garde son mode, son modèle et sa conversation. Au redémarrage, FRIDAY reprend la dernière session. Raccourcis clavier : `/aide`.
 
-### Parler à FRIDAY
+### FRIDAY toujours à l'écoute
+
+```powershell
+.venv\Scripts\friday ecoute
+```
+
+- Dites **« Hey Jarvis »** (en attendant le mot « Friday »), ou appuyez sur **Ctrl+Alt+F** depuis n'importe quelle fenêtre, ou sur Entrée dans le terminal. Un petit son indique que FRIDAY vous écoute.
+- Pour l'**interrompre** pendant qu'elle parle : redites « Hey Jarvis » (puis « stop » ou votre nouvelle demande), tapez `/stop`, ou Ctrl+C.
+- Quand FRIDAY vous pose une question, répondez directement, sans redire le mot d'activation.
+- « Coupe le micro » : FRIDAY n'écoute plus le mot d'activation (le raccourci reste actif) ; « réactive le micro » pour revenir.
+- Réglages dans `config\friday.yaml`, section `wake_word` : `threshold` (plus haut = moins de faux déclenchements), `barge_in`, `hotkey`.
+- Tant que rien ne la réveille, FRIDAY analyse le son **localement** et n'envoie rien à Claude.
+
+### Parler à FRIDAY dans `friday chat`
 
 Dans `friday chat`, appuyez sur **Entrée sans rien taper** : un petit son indique que FRIDAY écoute. Parlez, puis marquez une pause d'une seconde ; un second son indique la fin de l'écoute. FRIDAY affiche ce qu'elle a compris, puis répond.
 

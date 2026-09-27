@@ -7,9 +7,12 @@ user:
   names: ["Mr", "Mr Chemmane"]   # façons dont FRIDAY s'adresse à l'utilisateur
 
 wake_word:
-  model: hey_jarvis     # "friday" une fois le modèle personnalisé entraîné (phase 10)
-  threshold: 0.5
-  hotkey: ctrl+alt+f    # push-to-talk global
+  enabled: true
+  model: hey_jarvis         # "friday" une fois le modèle personnalisé entraîné (phase 10)
+  models_dir: models/openwakeword
+  threshold: 0.5            # 0 à 1 : plus haut = moins de faux déclenchements
+  barge_in: true            # le mot d'activation interrompt FRIDAY quand elle parle
+  hotkey: ctrl+alt+f        # push-to-talk global (fonctionne même micro coupé)
 
 audio:
   # Nom du périphérique tel qu'affiché par `friday devices` (un extrait suffit, accents et

@@ -27,7 +27,7 @@ class Narrator:
     ) -> None:
         self._tts = tts
         self._output = output
-        self._on_speaking = on_speaking
+        self._listeners: list[Callable[[bool], None]] = [on_speaking] if on_speaking else []
         # None closes the queue.
         self._texts: queue.Queue[tuple[int, str] | None] = queue.Queue()
         self._clips: queue.Queue[tuple[int, AudioClip] | None] = queue.Queue()
@@ -46,6 +46,10 @@ class Narrator:
     @property
     def speaking(self) -> bool:
         return not self._idle.is_set()
+
+    def add_listener(self, listener: Callable[[bool], None]) -> None:
+        """Called with True when FRIDAY starts speaking and False when she falls silent."""
+        self._listeners.append(listener)
 
     def say(self, text: str) -> None:
         spoken = clean_for_speech(text)
@@ -112,8 +116,8 @@ class Narrator:
                 self._notify(False)
 
     def _notify(self, speaking: bool) -> None:
-        if self._on_speaking is not None:
+        for listener in self._listeners:
             try:
-                self._on_speaking(speaking)
+                listener(speaking)
             except Exception:
-                logger.exception("on_speaking callback failed")
+                logger.exception("Speaking listener failed")

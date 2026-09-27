@@ -36,6 +36,7 @@ from friday.core.intents import (
     SetModel,
     Stop,
     Unclear,
+    UnmuteMic,
 )
 from friday.core.messages import (
     MODE_LABELS,
@@ -89,6 +90,7 @@ class StateChanged:
     model: str
     model_label: str
     model_locked: bool
+    mic_muted: bool = False
 
 
 @dataclass(frozen=True)
@@ -179,6 +181,7 @@ class Controller:
             Cancel: self._stop,
             Repeat: self._repeat,
             MuteMic: self._mute,
+            UnmuteMic: self._unmute,
             OpenClaudeWeb: self._open_web,
         }
 
@@ -567,7 +570,13 @@ class Controller:
 
     def _mute(self, _: MuteMic) -> _Outputs:
         self.mic_muted = True
-        yield Say("Micro coupé.")
+        yield Say("Micro coupé. Utilisez le raccourci clavier pour me parler.")
+        yield self._state()
+
+    def _unmute(self, _: UnmuteMic) -> _Outputs:
+        self.mic_muted = False
+        yield Say("Micro réactivé.")
+        yield self._state()
 
     def _open_web(self, _: OpenClaudeWeb) -> _Outputs:
         self._open_url(CLAUDE_WEB_URL)
@@ -623,4 +632,5 @@ class Controller:
             model=self._brain.state.model,
             model_label=self._label(self._brain.state.model),
             model_locked=record.model_lock is not None,
+            mic_muted=self.mic_muted,
         )

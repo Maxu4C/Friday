@@ -88,6 +88,16 @@ class SttConfig:
 
 
 @dataclass(frozen=True)
+class WakeWordConfig:
+    enabled: bool
+    model: str
+    models_dir: Path
+    threshold: float
+    barge_in: bool
+    hotkey: str | None
+
+
+@dataclass(frozen=True)
 class FridayConfig:
     user_names: tuple[str, ...]
     claude: ClaudeConfig
@@ -96,6 +106,7 @@ class FridayConfig:
     tts: TtsConfig
     audio: AudioConfig
     stt: SttConfig
+    wake_word: WakeWordConfig
     ui_host: str
     ui_port: int
     data_dir: Path
@@ -139,6 +150,7 @@ def parse_config(raw: dict[str, Any]) -> FridayConfig:
         tts=_parse_tts(_section(raw, "tts")),
         audio=_parse_audio(_section(raw, "audio")),
         stt=_parse_stt(_section(raw, "stt")),
+        wake_word=_parse_wake_word(_section(raw, "wake_word")),
         ui_host=host,
         ui_port=port,
         data_dir=data_dir,
@@ -256,6 +268,23 @@ def _parse_audio(section: dict[str, Any]) -> AudioConfig:
         end_silence_seconds=number("end_silence_seconds", 1.0, 0.3, 5),
         max_listen_seconds=number("max_listen_seconds", 20, 2, 120),
         cues=bool(section.get("cues", True)),
+    )
+
+
+def _parse_wake_word(section: dict[str, Any]) -> WakeWordConfig:
+    threshold = section.get("threshold", 0.5)
+    if not isinstance(threshold, int | float) or not 0.05 <= threshold <= 0.99:
+        raise ConfigError("wake_word.threshold doit être un nombre entre 0.05 et 0.99.")
+    hotkey = section.get("hotkey")
+    if hotkey is not None and (not isinstance(hotkey, str) or not hotkey.strip()):
+        raise ConfigError("wake_word.hotkey doit être un raccourci comme ctrl+alt+f, ou null.")
+    return WakeWordConfig(
+        enabled=bool(section.get("enabled", True)),
+        model=_str(section, "wake_word.model"),
+        models_dir=_path(section.get("models_dir", "models/openwakeword"), "wake_word.models_dir"),
+        threshold=float(threshold),
+        barge_in=bool(section.get("barge_in", True)),
+        hotkey=hotkey,
     )
 
 

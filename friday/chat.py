@@ -10,16 +10,9 @@ import signal
 from collections.abc import Callable, Iterator
 from types import FrameType
 
-from friday.core.controller import (
-    Ask,
-    Controller,
-    Output,
-    Say,
-    ShowSessions,
-    StateChanged,
-    StopSpeaking,
-)
-from friday.core.events import Mode, TextDelta, ToolResult, ToolUse, TurnCompleted
+from friday.console import ConsoleDisplay
+from friday.core.controller import Controller, Output
+from friday.core.events import Mode
 from friday.core.intents import (
     AskMode,
     AskModel,
@@ -34,11 +27,11 @@ from friday.core.intents import (
     ResumeSession,
     SetMode,
 )
-from friday.core.messages import HEARD_NOTHING, MODE_LABELS, NOT_UNDERSTOOD
+from friday.core.messages import HEARD_NOTHING, NOT_UNDERSTOOD
 from friday.core.narrator import Narrator
 from friday.core.ports import Ears
-from friday.core.speech import Segment, Speak, SpeechStream
 from friday.core.text import normalize
+from friday.core.voice import SpeechRouter
 
 HELP = """Parlez normalement : « utilise Opus », « passe en mode Claude Code »,
 « nouvelle session pour le projet boucherie », « liste mes sessions »,
@@ -82,8 +75,8 @@ class ChatSession:
         self._read = read
         self._narrator = narrator
         self._ears = ears
-        self._speech = SpeechStream()
-        self._streaming = False
+        self._display = ConsoleDisplay(write)
+        self._speech = SpeechRouter(narrator) if narrator is not None else None
 
     def run(self) -> int:
         self._render(self._controller.start())
@@ -113,7 +106,7 @@ class ChatSession:
                     break
         finally:
             self._controller.close()
-        self._say("À bientôt.")
+        self._display.say("À bientôt.")
         if self._narrator is not None:
             self._narrator.say("À bientôt.")
             self._narrator.wait(timeout=10)
@@ -125,22 +118,23 @@ class ChatSession:
         assert self._ears is not None
         if self._narrator is not None:
             self._narrator.stop()  # never record FRIDAY's own voice
-        self._write("  [écoute… parlez]\n")
+        self._display.write("  [écoute… parlez]\n")
         heard = self._ears.listen()
         if heard.text is None:
             message = HEARD_NOTHING if heard.reason == "silence" else NOT_UNDERSTOOD
-            self._say(message)
+            self._display.say(message)
             if self._narrator is not None:
                 self._narrator.say(message)
             return True
-        self._write(f"Vous (voix) > {heard.text}\n")
+        self._display.write(f"Vous (voix) > {heard.text}\n")
         return self.handle(heard.text)
 
     def handle(self, line: str) -> bool:
         """Process one input line; return False to quit."""
         if self._narrator is not None:
             self._narrator.stop()  # a new request cuts the previous answer
-        self._speech = SpeechStream()
+        if self._speech is not None:
+            self._speech.reset()
         if not line.startswith("/"):
             self._render(self._controller.handle(line))
             return True
@@ -153,7 +147,7 @@ class ChatSession:
             return True
         outputs = self._shortcut(command, argument)
         if outputs is None:
-            self._say(f"Commande inconnue : /{command}. Tapez /aide.")
+            self._display.say(f"Commande inconnue : /{command}. Tapez /aide.")
         else:
             self._render(outputs)
         return True
@@ -214,67 +208,9 @@ class ChatSession:
         signal.signal(signal.SIGINT, interrupt)
         try:
             for output in outputs:
-                self._show(output)
+                self._display.show(output)
+                if self._speech is not None:
+                    self._speech.handle(output)
         finally:
             signal.signal(signal.SIGINT, previous)
-            self._end_stream()
-
-    def _show(self, output: Output) -> None:
-        if isinstance(output, TextDelta):
-            if not self._streaming:
-                self._write("\nFRIDAY > ")
-                self._streaming = True
-            self._write(output.text)
-            self._speak(self._speech.feed(output.text))
-        elif isinstance(output, StopSpeaking):
-            if self._narrator is not None:
-                self._narrator.stop()
-            self._speech = SpeechStream()
-        elif isinstance(output, ToolUse):
-            self._end_stream()
-            self._write(f"  [outil] {output.name} {_brief(output.input)}\n")
-        elif isinstance(output, ToolResult) and output.is_error:
-            self._write(f"  [échec] {output.summary}\n")
-        elif isinstance(output, TurnCompleted):
-            self._end_stream()
-            self._speak(self._speech.flush())
-            if output.permission_denials:
-                self._write(f"  [refusé] {', '.join(output.permission_denials)}\n")
-        elif isinstance(output, Say | Ask):
-            self._say(output.text)
-            if self._narrator is not None:
-                self._narrator.say(output.text)
-        elif isinstance(output, ShowSessions):
-            self._end_stream()
-            for record in output.sessions:
-                mark = "*" if record.key == output.current_key else " "
-                lock = record.model_lock or "auto"
-                used = record.last_used_at.strftime("%d/%m %H:%M")
-                line = f"  {mark} {record.name} · {MODE_LABELS[record.mode]} · {lock} · {used}"
-                self._write(line + (f" · {record.summary}" if record.summary else "") + "\n")
-        elif isinstance(output, StateChanged):
-            pass  # the graphical interface uses it; the text chat announces changes with Say
-
-    def _speak(self, segments: list[Segment]) -> None:
-        if self._narrator is None:
-            return
-        for segment in segments:
-            if isinstance(segment, Speak):
-                self._narrator.say(segment.text)
-
-    def _end_stream(self) -> None:
-        if self._streaming:
-            self._write("\n")
-            self._streaming = False
-
-    def _say(self, text: str) -> None:
-        self._end_stream()
-        self._write(f"\nFRIDAY > {text}\n")
-
-
-def _brief(data: dict[str, object], limit: int = 80) -> str:
-    for key in ("command", "file_path", "pattern", "path", "url"):
-        if key in data:
-            text = str(data[key])
-            return text if len(text) <= limit else text[: limit - 1] + "…"
-    return ""
+            self._display.end_stream()
