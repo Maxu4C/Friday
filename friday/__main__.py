@@ -88,15 +88,23 @@ def create_controller(config: FridayConfig) -> Controller:
 def create_narrator(config: FridayConfig) -> Narrator:
     """Piper voice, or the Windows voice if Piper cannot be loaded."""
     from friday.adapters.audio_io import SoundDevicePlayer
-    from friday.adapters.tts_piper import PiperTTS
+    from friday.adapters.tts_piper import PiperTTS, VoiceStyle
     from friday.adapters.tts_windows_sapi import WindowsSapiTTS
     from friday.core.narrator import Narrator
     from friday.core.ports import TextToSpeech
 
     tts: TextToSpeech
     if config.tts.engine == "piper":
+        style = VoiceStyle(
+            length_scale=config.tts.length_scale,
+            noise_scale=config.tts.noise_scale,
+            noise_w_scale=config.tts.noise_w_scale,
+            volume=config.tts.volume,
+            softness=config.tts.softness,
+            speaker=config.tts.speaker,
+        )
         try:
-            tts = PiperTTS(config.tts.models_dir, config.tts.voice, config.tts.length_scale)
+            tts = PiperTTS(config.tts.models_dir, config.tts.voice, style)
         except Exception as exc:  # missing model, onnxruntime problem...
             logging.getLogger(__name__).warning("Piper unavailable (%s), using SAPI", exc)
             print(f"Voix Piper indisponible ({exc}) : voix Windows utilisée.", file=sys.stderr)
@@ -134,6 +142,50 @@ def _chat(mute: bool) -> int:
     narrator = None if mute or not config.tts.enabled else create_narrator(config)
     session = ChatSession(create_controller(config), write=write, read=input, narrator=narrator)
     return session.run()
+
+
+VOICE_SAMPLES = (
+    (
+        "A",
+        "fr_FR-siwis-medium",
+        None,
+        "Voix A. Bonsoir Mister Chemmane. Tous les systèmes sont opérationnels. "
+        "Je reste à votre disposition.",
+    ),
+    (
+        "B",
+        "fr_FR-upmc-medium",
+        "jessica",
+        "Voix B. Bonsoir Mister Chemmane. Tous les systèmes sont opérationnels. "
+        "Je reste à votre disposition.",
+    ),
+)
+
+
+def _voices() -> int:
+    """Play each candidate voice with the configured slow and soft style."""
+    from friday.adapters.audio_io import SoundDevicePlayer
+    from friday.adapters.tts_piper import PiperTTS, VoiceStyle
+
+    config = _load()
+    if config is None:
+        return 2
+    tts = config.tts
+    player = SoundDevicePlayer(config.audio.output_device)
+    for label, voice, speaker, text in VOICE_SAMPLES:
+        if not (tts.models_dir / f"{voice}.onnx").exists():
+            print(f"Voix {label} ({voice}) absente : python -m piper.download_voices {voice}")
+            continue
+        style = VoiceStyle(
+            tts.length_scale, tts.noise_scale, tts.noise_w_scale, tts.volume, tts.softness, speaker
+        )
+        print(f"Voix {label} : voice: {voice}" + (f", speaker: {speaker}" if speaker else ""))
+        player.play(PiperTTS(tts.models_dir, voice, style).synthesize(text), lambda: False)
+    print(
+        "Réglez tts.voice / tts.speaker dans config\\friday.yaml ; tts.length_scale pour le "
+        "débit et tts.softness pour la douceur."
+    )
+    return 0
 
 
 def _say(text: str) -> int:
@@ -177,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     chat.add_argument("--muet", action="store_true", help="réponses écrites seulement")
     say = commands.add_parser("dis", help="fait prononcer un texte à FRIDAY (test de la voix)")
     say.add_argument("texte", nargs="+")
+    commands.add_parser("voix", help="fait écouter les voix disponibles pour choisir")
 
     args = parser.parse_args(argv)
     if args.command == "devices":
@@ -185,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         return _chat(args.muet)
     if args.command == "dis":
         return _say(" ".join(args.texte))
+    if args.command == "voix":
+        return _voices()
     return 1
 
 

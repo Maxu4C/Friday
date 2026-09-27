@@ -236,12 +236,55 @@ def test_local_answers_are_spoken_and_stop_silences() -> None:
 VOICE_DIR = Path(__file__).parents[1] / "models" / "piper"
 
 
-@pytest.mark.skipif(
-    not (VOICE_DIR / "fr_FR-siwis-medium.onnx").exists(), reason="Piper voice not downloaded"
-)
-def test_real_piper_voice_produces_audio() -> None:
-    from friday.adapters.tts_piper import PiperTTS
+def test_softening_keeps_length_and_tames_high_frequencies() -> None:
+    import numpy as np
 
-    clip = PiperTTS(VOICE_DIR, "fr_FR-siwis-medium").synthesize("Bonjour, je suis FRIDAY.")
-    assert clip.sample_rate == 22050
-    assert 0.8 < clip.duration < 4
+    from friday.adapters.tts_piper import soften
+
+    rate = 22050
+    t = np.arange(rate) / rate
+    low = 8000 * np.sin(2 * np.pi * 300 * t)
+    high = 8000 * np.sin(2 * np.pi * 7000 * t)
+    pcm = (low + high).astype(np.int16).tobytes()
+    softened = np.frombuffer(soften(pcm, 1.0), dtype=np.int16).astype(np.float64)
+    assert len(softened) == rate
+
+    def energy(signal: np.ndarray, frequency: int) -> float:
+        return float(abs(np.fft.rfft(signal)[frequency]))
+
+    original = (low + high).astype(np.int16).astype(np.float64)
+    assert energy(softened, 7000) < 0.2 * energy(original, 7000)
+    assert energy(softened, 300) > 0.9 * energy(original, 300)
+
+
+def test_voice_style_config() -> None:
+    from friday.config import load_config
+
+    tts = load_config(Path(__file__).parents[1] / "config" / "friday.example.yaml").tts
+    assert tts.length_scale > 1 and 0 < tts.softness <= 1 and tts.volume < 1
+
+
+VOICE = VOICE_DIR / "fr_FR-siwis-medium.onnx"
+
+
+@pytest.mark.skipif(not VOICE.exists(), reason="Piper voice not downloaded")
+def test_real_piper_voice_produces_audio() -> None:
+    from friday.adapters.tts_piper import PiperTTS, VoiceStyle
+
+    text = "Bonjour, je suis FRIDAY."
+    normal = PiperTTS(VOICE_DIR, "fr_FR-siwis-medium").synthesize(text)
+    slow = PiperTTS(VOICE_DIR, "fr_FR-siwis-medium", VoiceStyle(length_scale=1.3, softness=0.5))
+    assert normal.sample_rate == 22050
+    assert 0.8 < normal.duration < 4
+    assert slow.synthesize(text).duration > normal.duration * 1.15
+
+
+@pytest.mark.skipif(
+    not (VOICE_DIR / "fr_FR-upmc-medium.onnx").exists(), reason="upmc voice not downloaded"
+)
+def test_speaker_is_chosen_by_name() -> None:
+    from friday.adapters.tts_piper import PiperTTS, PiperUnavailableError, VoiceStyle
+
+    PiperTTS(VOICE_DIR, "fr_FR-upmc-medium", VoiceStyle(speaker="jessica"))
+    with pytest.raises(PiperUnavailableError, match="jessica, pierre"):
+        PiperTTS(VOICE_DIR, "fr_FR-upmc-medium", VoiceStyle(speaker="paul"))

@@ -22,6 +22,11 @@
 - « Mr » est prononcé « Mister » (en français, espeak lirait « M R »).
 - Toute nouvelle saisie coupe la parole en cours (le mot « stop » vocal viendra avec le micro).
 
+### Ajustement demandé : voix plus lente et plus douce (« comme FRIDAY dans Iron Man »)
+- Style par défaut : `length_scale` 1.2 (plus lent), `noise_scale` 0.5 et `noise_w_scale` 0.6 (intonation et rythme plus réguliers, plus posés), `volume` 0.85, `softness` 0.5 (filtre passe-bas binomial à 5 coefficients mélangé au signal : adoucit les sifflantes).
+- Seconde voix féminine téléchargée pour comparer : `fr_FR-upmc-medium`, locutrice « jessica » (`tts.speaker`). `friday voix` fait écouter les deux avec le style configuré.
+- Limite : les voix Piper françaises gratuites n'ont pas l'accent irlandais de la FRIDAY du film ; on approche surtout le ton calme et doux.
+
 ### Reste
 - Machine à états IDLE → LISTENING → THINKING → SPEAKING et anti-écho : phases 4 et 5.
 

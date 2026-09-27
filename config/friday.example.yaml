@@ -31,9 +31,15 @@ stt:
 tts:
   enabled: true           # false : FRIDAY écrit sans parler
   engine: piper           # piper (voix neuronale locale) | windows_sapi ; repli automatique sur windows_sapi
-  voice: fr_FR-siwis-medium   # ou fr_FR-upmc-medium (python -m piper.download_voices <voix> --download-dir models/piper)
+  voice: fr_FR-siwis-medium   # ou fr_FR-upmc-medium avec speaker: jessica (`friday voix` pour comparer)
+  speaker: null           # locuteur pour les voix qui en ont plusieurs (upmc : jessica, pierre)
   models_dir: models/piper
-  length_scale: 1.0       # vitesse : > 1 plus lent, < 1 plus rapide
+  # Style « FRIDAY » : posé, calme et doux.
+  length_scale: 1.2       # débit : > 1 plus lent, < 1 plus rapide
+  noise_scale: 0.5        # plus bas : intonation plus régulière et apaisée
+  noise_w_scale: 0.6      # plus bas : rythme plus régulier
+  volume: 0.85
+  softness: 0.5           # 0 à 1 : adoucit les aigus (sifflantes)
 
 claude:
   binary: claude

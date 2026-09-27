@@ -58,6 +58,11 @@ class TtsConfig:
     voice: str
     models_dir: Path
     length_scale: float
+    noise_scale: float
+    noise_w_scale: float
+    volume: float
+    softness: float
+    speaker: str | int | None
 
 
 @dataclass(frozen=True)
@@ -181,16 +186,28 @@ def _parse_tts(section: dict[str, Any]) -> TtsConfig:
     engine = section.get("engine", "piper")
     if engine not in TTS_ENGINES:
         raise ConfigError(f"tts.engine doit valoir {' ou '.join(TTS_ENGINES)}.")
-    length_scale = section.get("length_scale", 1.0)
-    if not isinstance(length_scale, int | float) or not 0.3 <= length_scale <= 3:
-        raise ConfigError("tts.length_scale doit être un nombre entre 0.3 et 3.")
+    speaker = section.get("speaker")
+    if speaker is not None and not isinstance(speaker, str | int):
+        raise ConfigError("tts.speaker doit être un nom, un numéro ou null.")
     return TtsConfig(
         enabled=bool(section.get("enabled", True)),
         engine=engine,
         voice=_str(section, "tts.voice"),
         models_dir=_path(section.get("models_dir", "models/piper"), "tts.models_dir"),
-        length_scale=float(length_scale),
+        length_scale=_bounded(section, "length_scale", 1.0, 0.3, 3),
+        noise_scale=_bounded(section, "noise_scale", 0.667, 0, 2),
+        noise_w_scale=_bounded(section, "noise_w_scale", 0.8, 0, 2),
+        volume=_bounded(section, "volume", 1.0, 0.05, 2),
+        softness=_bounded(section, "softness", 0.0, 0, 1),
+        speaker=speaker,
     )
+
+
+def _bounded(section: dict[str, Any], key: str, default: float, low: float, high: float) -> float:
+    value = section.get(key, default)
+    if not isinstance(value, int | float) or not low <= value <= high:
+        raise ConfigError(f"tts.{key} doit être un nombre entre {low} et {high}.")
+    return float(value)
 
 
 def _parse_audio(section: dict[str, Any]) -> AudioConfig:
