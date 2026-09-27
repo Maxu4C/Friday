@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Protocol
+from pathlib import Path
+from typing import Any, Protocol
 
 from friday.core.events import BrainEvent, Mode, RateLimitStatus
 
@@ -15,10 +16,19 @@ class SessionState:
     model: str
     name: str
     session_id: str | None = None
+    workspace: Path | None = None  # None: the default working folder
 
 
 class BrainBusyError(RuntimeError):
     """A request is already running."""
+
+
+class Storage(Protocol):
+    """Persistence of a small JSON document (sessions, usage)."""
+
+    def load(self) -> dict[str, Any] | None: ...
+
+    def save(self, data: dict[str, Any]) -> None: ...
 
 
 class Brain(Protocol):
@@ -43,8 +53,12 @@ class Brain(Protocol):
 
     def set_mode(self, mode: Mode) -> None: ...
 
-    def new_session(self, name: str, mode: Mode, model: str) -> None: ...
+    def new_session(
+        self, name: str, mode: Mode, model: str, workspace: Path | None = None
+    ) -> None: ...
 
-    def resume_session(self, session_id: str, name: str, mode: Mode, model: str) -> None: ...
+    def resume_session(
+        self, session_id: str, name: str, mode: Mode, model: str, workspace: Path | None = None
+    ) -> None: ...
 
     def close(self) -> None: ...

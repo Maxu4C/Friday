@@ -329,11 +329,17 @@ class ClaudeCodeBrain:
             self._state.mode = mode
             self._drop_process()  # tools are fixed at launch: relaunch with --resume
 
-    def new_session(self, name: str, mode: Mode, model: str) -> None:
-        self._switch(SessionState(mode=mode, model=model, name=name))
+    def new_session(self, name: str, mode: Mode, model: str, workspace: Path | None = None) -> None:
+        self._switch(SessionState(mode=mode, model=model, name=name, workspace=workspace))
 
-    def resume_session(self, session_id: str, name: str, mode: Mode, model: str) -> None:
-        self._switch(SessionState(mode=mode, model=model, name=name, session_id=session_id))
+    def resume_session(
+        self, session_id: str, name: str, mode: Mode, model: str, workspace: Path | None = None
+    ) -> None:
+        self._switch(
+            SessionState(
+                mode=mode, model=model, name=name, session_id=session_id, workspace=workspace
+            )
+        )
 
     def close(self) -> None:
         if self._turn is not None:
@@ -360,7 +366,8 @@ class ClaudeCodeBrain:
         binary = self._which(self._settings.binary)
         if binary is None:
             raise BrainUnavailableError(f"'{self._settings.binary}' est introuvable dans le PATH.")
-        self._settings.workspace.mkdir(parents=True, exist_ok=True)
+        workspace = self._state.workspace or self._settings.workspace
+        workspace.mkdir(parents=True, exist_ok=True)
         self._settings.runtime_dir.mkdir(parents=True, exist_ok=True)
         prompt_file = self._settings.runtime_dir / "system-prompt.md"
         prompt = build_system_prompt(
@@ -383,7 +390,7 @@ class ClaudeCodeBrain:
             self._state.model,
             self._state.session_id,
         )
-        handle = self._factory(command, build_env(os.environ), self._settings.workspace)
+        handle = self._factory(command, build_env(os.environ), workspace)
         self._process = _Process(handle)
         return self._process
 

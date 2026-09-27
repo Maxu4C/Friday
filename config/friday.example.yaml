@@ -98,10 +98,68 @@ models:
     opus: { label: "Opus 5.5", aliases: ["opus", "opus 5.5", "opus cinq cinq"] }
     fable: { label: "Fable 5.1", aliases: ["fable", "fable 5.1", "fable cinq un"] }
 
+# Choix automatique du modèle, sans appeler Claude : question simple et courte -> models.simple,
+# tout le reste (action, fichier, code, raisonnement, cas ambigu) -> models.complex.
+# Accents et majuscules ignorés ; le dernier mot peut être conjugué (« crée » couvre « créez »).
 router:
   simple_max_words: 20
-  simple_patterns: ["qu'est-ce que", "c'est quoi", "combien", "quelle heure", "traduis", "définis", "explique en une phrase"]
-  complex_patterns: ["crée", "modifie", "corrige", "ouvre", "exécute", "cherche dans", "analyse", "refactorise", "déploie", "compare", "conçois", "planifie", "pourquoi ça plante"]
+  simple_patterns:
+    - "qu'est-ce que"
+    - "qu'est-ce qu"
+    - "c'est quoi"
+    - "combien"
+    - "quelle heure"
+    - "quel jour"
+    - "quelle date"
+    - "traduis"
+    - "traduire"
+    - "comment dit-on"
+    - "définis"
+    - "définition"
+    - "que veut dire"
+    - "que signifie"
+    - "explique en une phrase"
+    - "qui est"
+    - "qui était"
+    - "qui a"
+    - "quand"
+    - "où se trouve"
+    - "où est"
+    - "quelle est la capitale"
+    - "quel est"
+    - "quelle est"
+  complex_patterns:
+    - "crée"
+    - "créer"
+    - "modifie"
+    - "corrige"
+    - "ouvre"
+    - "ouvrir"
+    - "ouvrez"
+    - "exécute"
+    - "lance"
+    - "cherche dans"
+    - "recherche dans"
+    - "analyse"
+    - "refactorise"
+    - "déploie"
+    - "déployer"
+    - "installe"
+    - "compare"
+    - "conçois"
+    - "concevoir"
+    - "concevez"
+    - "planifie"
+    - "organise"
+    - "rédige"
+    - "écris"
+    - "écrire"
+    - "résume"
+    - "pourquoi ça plante"
+    - "pourquoi ça marche pas"
+    - "pourquoi ça ne marche pas"
+    - "démontre"
+    - "étape par étape"
 
 ui:
   host: 127.0.0.1       # ne jamais exposer sur le réseau

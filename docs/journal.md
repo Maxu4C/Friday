@@ -1,5 +1,33 @@
 # Journal de bord
 
+## Phase 2 — Commandes locales, routeur, sessions (2026-09-27)
+
+### Fait
+- `friday/core/intents.py` : détection locale (sans Claude, donc sans quota) des commandes de modèle, de mode, de sessions, d'état et de contrôle, tolérante aux accents, à la casse, à la ponctuation, aux formules de politesse (« Friday », « s'il vous plaît », « tu peux… »), au tutoiement comme au vouvoiement et aux variantes de transcription (« aïcou », « cloud code »). Une commande suivie d'une demande (« utilise Opus pour analyser… ») applique la commande puis envoie la suite à Claude, avec ses accents d'origine. Une phrase qui ressemble à une commande (« Opus ? », « session boucherie ») déclenche une question de confirmation.
+- `friday/core/router.py` : choix local Haiku / Opus. Simple = question de connaissance courte sans action, fichier, chemin ni sujet technique ; tout le reste et les cas ambigus → modèle complexe ; mode Claude Code → modèle complexe. Règles éditables dans `friday.yaml`.
+- `friday/core/sessions.py` + `data/sessions.json` : registre des sessions (nom, identifiant Claude Code, mode, modèle, verrou de modèle, dossier, dates, résumé d'une ligne), recherche tolérante (Levenshtein ≤ 2, nom partiel, « 3 » pour « Session 3 »), ambiguïté → « Laquelle ? ».
+- `friday/core/usage.py` + `data/usage.json` : compteur de requêtes par modèle et par heure (31 jours) → « combien de requêtes aujourd'hui ? ».
+- `friday/core/controller.py` : logique applicative commune au texte, à la voix et à l'interface ; questions en attente (passage en mode Claude Code, oubli d'une session, commande incertaine, choix entre sessions) ; au démarrage, reprise de la dernière session active (mode et modèle compris) et annonce.
+- `friday chat` réécrit comme simple affichage du contrôleur : les phrases naturelles fonctionnent comme à l'oral, les raccourcis `/…` restent disponibles.
+- FRIDAY vouvoie l'utilisateur (persona et messages locaux).
+- 213 tests (dont toutes les phrases d'exemple du §3.5 et des variantes), ruff et mypy strict propres.
+
+### Vérifié en réel
+- Question simple → Haiku 4.5 ; « quel modèle tu utilises ? » répond sans appeler Claude.
+- Sessions : création nommée, liste parlée, session précédente, reprise malgré une faute (« bouchrie »), contexte conservé (`--resume`), redémarrage de FRIDAY → « Session boucherie, mode Claude, Fable 5.1. » et le contexte est toujours là.
+
+### Décisions
+- **Verrou de modèle par session** (`model_lock`) : « utilise Fable » s'impose dans cette session jusqu'à « modèle automatique » ; sinon le routeur choisit à chaque requête et le changement se fait par `/model` dans la session (sans relance ni quota).
+- **Mots techniques en mots entiers** dans le routeur (bug réel : « repo » reconnaissait « répondez » et envoyait une question simple sur Opus) ; les verbes d'action restent des préfixes pour couvrir les conjugaisons.
+- **Réponse inattendue à une question = nouvelle demande** : si l'utilisateur ne répond ni oui ni non, la question est abandonnée et la phrase traitée normalement (plus naturel à l'oral).
+- **Oublier une session** ne supprime que l'entrée du registre (confirmation demandée) ; la transcription Claude Code reste sur le disque.
+- **Arrêt propre du flux** : si l'affichage abandonne une réponse en cours, le contrôleur interrompt Claude et termine le tour, pour que le cerveau reste utilisable. Dans `friday chat`, Ctrl+C déclenche l'interruption via un gestionnaire de signal (plus de `KeyboardInterrupt` au milieu d'un générateur).
+- Dossier de travail mémorisé par session (`SessionState.workspace`) : prépare l'import des sessions existantes (phase 8).
+
+### Reste
+- Import des sessions Claude Code existantes (phase 8).
+- Les noms dictés sont gardés tels quels (« boucherie » en minuscules si c'est ainsi qu'il a été dit ou tapé).
+
 ## Phase 1 — Cerveau texte (2026-09-27)
 
 ### Fait

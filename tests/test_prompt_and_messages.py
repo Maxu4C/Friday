@@ -43,14 +43,14 @@ def test_rate_limit_message_gives_reset_time_and_haiku_hint() -> None:
     text = error_message(
         BrainError(BrainErrorKind.RATE_LIMIT, resets_at=reset), "Opus 5.5", "Haiku 4.5"
     )
-    assert text.startswith("J'ai atteint la limite de mon abonnement")
+    assert text.startswith("J'ai atteint la limite de votre abonnement")
     assert "se réinitialise vers" in text
     assert "Haiku 4.5" in text
 
 
 def test_rate_limit_message_on_simple_model_has_no_hint() -> None:
     text = error_message(BrainError(BrainErrorKind.RATE_LIMIT), "Haiku 4.5", "Haiku 4.5")
-    assert "Tu peux aussi" not in text
+    assert "Vous pouvez aussi" not in text
 
 
 def test_other_error_messages() -> None:

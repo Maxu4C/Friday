@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from friday.core.events import Mode
+from friday.core.router import RouterRules
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "friday.yaml"
@@ -55,6 +56,7 @@ class FridayConfig:
     user_names: tuple[str, ...]
     claude: ClaudeConfig
     models: ModelsConfig
+    router: RouterRules
     ui_host: str
     ui_port: int
     data_dir: Path
@@ -94,6 +96,7 @@ def parse_config(raw: dict[str, Any]) -> FridayConfig:
         user_names=tuple(names),
         claude=claude,
         models=models,
+        router=_parse_router(_section(raw, "router")),
         ui_host=host,
         ui_port=port,
         data_dir=data_dir,
@@ -137,6 +140,19 @@ def _parse_claude(section: dict[str, Any]) -> ClaudeConfig:
         allowed_tools=_str_list(section, "allowed_tools"),
         confirm_tools=_str_list(section, "confirm_tools"),
     )
+
+
+def _parse_router(section: dict[str, Any]) -> RouterRules:
+    max_words = section.get("simple_max_words", 20)
+    if not isinstance(max_words, int) or max_words < 1:
+        raise ConfigError("router.simple_max_words doit être un entier positif.")
+    lists = {}
+    for key in ("simple_patterns", "complex_patterns"):
+        value = section.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ConfigError(f"router.{key} doit être une liste de textes.")
+        lists[key] = tuple(value)
+    return RouterRules(max_words, lists["simple_patterns"], lists["complex_patterns"])
 
 
 def _section(raw: dict[str, Any], key: str) -> dict[str, Any]:

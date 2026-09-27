@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from friday.adapters.brain_claude_code import ClaudeCodeBrain
     from friday.config import FridayConfig
+    from friday.core.controller import Controller
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
@@ -53,10 +54,34 @@ def create_brain(config: FridayConfig) -> ClaudeCodeBrain:
         confirm_tools=claude.confirm_tools,
         request_timeout=claude.request_timeout_seconds,
     )
-    # Phase 2 replaces this with the automatic router (simple -> Haiku, complex -> Opus).
-    model = config.models.complex
-    state = SessionState(mode=claude.default_mode, model=model, name="Session 1")
+    # Placeholder until Controller.start() loads the last active session.
+    state = SessionState(mode=claude.default_mode, model=config.models.complex, name="Session 1")
     return ClaudeCodeBrain(settings, state)
+
+
+def create_controller(config: FridayConfig) -> Controller:
+    from friday.adapters.json_store import JsonFile
+    from friday.core.controller import Controller, ControllerSettings
+    from friday.core.intents import IntentParser
+    from friday.core.router import Router
+
+    models = config.models
+    parser = IntentParser({alias: info.spoken for alias, info in models.available.items()})
+    settings = ControllerSettings(
+        model_labels={alias: info.label for alias, info in models.available.items()},
+        simple_model=models.simple,
+        complex_model=models.complex,
+        default_mode=config.claude.default_mode,
+        workspace=config.claude.workspace,
+    )
+    return Controller(
+        create_brain(config),
+        parser,
+        Router(config.router),
+        settings,
+        JsonFile(config.data_dir / "sessions.json"),
+        JsonFile(config.data_dir / "usage.json"),
+    )
 
 
 def _chat() -> int:
@@ -76,7 +101,7 @@ def _chat() -> int:
         sys.stdout.write(text)
         sys.stdout.flush()
 
-    session = ChatSession(create_brain(config), config.models, write=write, read=input)
+    session = ChatSession(create_controller(config), write=write, read=input)
     return session.run()
 
 
