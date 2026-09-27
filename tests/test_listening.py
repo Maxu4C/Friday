@@ -210,11 +210,16 @@ WHISPER = ROOT / "models" / "whisper"
 
 
 def spoken(text: str) -> np.ndarray:
-    """French speech at 16 kHz, produced by the Piper voice."""
-    from piper import PiperVoice
+    """French speech at 16 kHz, produced by the Piper voice.
+
+    Noise scales at 0 make the synthesis deterministic: with Piper's default random
+    sampling the same sentence scores anywhere between 0.44 and 0.98 on the wake word.
+    """
+    from piper import PiperVoice, SynthesisConfig
 
     voice = PiperVoice.load(PIPER)
-    audio = np.concatenate([c.audio_int16_array for c in voice.synthesize(text)])
+    config = SynthesisConfig(noise_scale=0.0, noise_w_scale=0.0)
+    audio = np.concatenate([c.audio_int16_array for c in voice.synthesize(text, config)])
     x = audio.astype(np.float32) / 32768
     count = int(len(x) * 16000 / voice.config.sample_rate)
     return np.interp(np.linspace(0, len(x) - 1, count), np.arange(len(x)), x)
