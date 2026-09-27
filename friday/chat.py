@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator
 from types import FrameType
 
 from friday.console import ConsoleDisplay
-from friday.core.controller import Controller, Output
+from friday.core.controller import ConfirmAction, Controller, Output
 from friday.core.events import Mode
 from friday.core.intents import (
     AskMode,
@@ -129,6 +129,23 @@ class ChatSession:
         self._display.write(f"Vous (voix) > {heard.text}\n")
         return self.handle(heard.text)
 
+    def _confirmation_answer(self, action: ConfirmAction) -> str:
+        """Typed answer, or spoken one if the user just presses Enter."""
+        expected = "oui, confirme / non" if action.step == 2 else "oui / non"
+        voice = " (Entrée = répondre à voix haute)" if self._ears is not None else ""
+        try:
+            typed = self._read(f"\nVotre réponse [{expected}]{voice} > ").lstrip("﻿").strip()
+        except (EOFError, KeyboardInterrupt):
+            return ""
+        if typed or self._ears is None:
+            return typed
+        if self._narrator is not None:
+            self._narrator.wait(timeout=20)  # let FRIDAY finish the question first
+        heard = self._ears.listen()
+        if heard.text:
+            self._display.write(f"Vous (voix) > {heard.text}\n")
+        return heard.text or ""
+
     def handle(self, line: str) -> bool:
         """Process one input line; return False to quit."""
         if self._narrator is not None:
@@ -211,6 +228,8 @@ class ChatSession:
                 self._display.show(output)
                 if self._speech is not None:
                     self._speech.handle(output)
+                if isinstance(output, ConfirmAction):
+                    self._controller.answer_confirmation(self._confirmation_answer(output))
         finally:
             signal.signal(signal.SIGINT, previous)
             self._display.end_stream()

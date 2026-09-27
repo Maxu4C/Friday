@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from friday.core.events import BrainEvent, Mode, TextDelta, TurnCompleted
+from friday.core.events import BrainEvent, Mode, PermissionRequest, TextDelta, TurnCompleted
 from friday.core.intents import (
     AskMode,
     AskModel,
@@ -49,6 +49,7 @@ from friday.core.messages import (
 from friday.core.ports import Brain, Storage
 from friday.core.prompt import MODE_CODE_ENABLED_NOTE, MODE_CODE_MARKER
 from friday.core.router import ModelRole, Router
+from friday.core.safety import Risk, assess, is_final_confirmation
 from friday.core.sessions import SessionNameTakenError, SessionRecord, SessionRegistry, summarize
 from friday.core.text import MarkerFilter, is_no, is_yes, levenshtein, normalize
 from friday.core.usage import UsageCounter
@@ -98,7 +99,18 @@ class StopSpeaking:
     """The user asked for silence: cut the voice immediately."""
 
 
-Output = Say | Ask | ShowSessions | StateChanged | StopSpeaking | BrainEvent
+@dataclass(frozen=True)
+class ConfirmAction:
+    """Claude Code wants to run an action: ask the user, then call
+    Controller.answer_confirmation() before reading the next output."""
+
+    question: str  # spoken
+    detail: str  # exact action, shown on screen
+    dangerous: bool
+    step: int  # 2 = second, explicit confirmation of a dangerous action
+
+
+Output = Say | Ask | ShowSessions | StateChanged | StopSpeaking | ConfirmAction | BrainEvent
 
 
 @dataclass(frozen=True)
@@ -108,6 +120,7 @@ class ControllerSettings:
     complex_model: str
     default_mode: Mode
     workspace: Path
+    permission_timeout: float = 30.0
 
 
 # -- pending questions ------------------------------------------------------------------
@@ -162,6 +175,7 @@ class Controller:
         self._registry = SessionRegistry.from_dict(sessions_store.load())
         self._usage = UsageCounter.from_dict(usage_store.load())
         self._pending: _Pending | None = None
+        self._confirmation: tuple[str, datetime] | None = None  # (answer, when)
         self._last_answer = ""
         self.mic_muted = False
         self._handlers: dict[type, Callable[[Any], _Outputs]] = {
@@ -240,6 +254,14 @@ class Controller:
         """Stop the running request (callable from another thread)."""
         self._brain.interrupt()
 
+    @property
+    def permission_timeout(self) -> float:
+        return self._settings.permission_timeout
+
+    def answer_confirmation(self, answer: str) -> None:
+        """The user's reply to the last ConfirmAction ("oui", "non", "oui, confirme"...)."""
+        self._confirmation = (answer, self._now())
+
     def close(self) -> None:
         self._brain.close()
         self._save()
@@ -265,6 +287,9 @@ class Controller:
                     if chunk:
                         answer.append(chunk)
                         yield TextDelta(chunk)
+                    continue
+                if isinstance(event, PermissionRequest):
+                    yield from self._ask_permission(event)
                     continue
                 if isinstance(event, TurnCompleted):
                     completed = True
@@ -310,6 +335,60 @@ class Controller:
         if wants_code and record.mode is Mode.CLAUDE:
             self._pending = _ConfirmModeSwitch(request)
             yield Ask("Voulez-vous que je passe en mode Claude Code ?")
+
+    # -- permissions ------------------------------------------------------------------------
+
+    def _ask_permission(self, request: PermissionRequest) -> _Outputs:
+        assessment = assess(request.tool, request.input, request.description)
+        dangerous = assessment.risk is Risk.DANGEROUS
+        question = f"{assessment.spoken}."
+        if dangerous:
+            question += f" Attention, action à risque : {assessment.reason}."
+        question += " Vous confirmez ?"
+        answer = yield from self._confirm(ConfirmAction(question, assessment.detail, dangerous, 1))
+        allowed, message = False, "Refusé par l'utilisateur."
+        if answer is None:
+            message = "Pas de réponse de l'utilisateur à temps."
+            yield Say("Sans réponse de votre part, j'ai refusé.")
+        elif is_yes(answer) or (dangerous and is_final_confirmation(answer)):
+            if not dangerous:
+                allowed = True
+            else:
+                final = yield from self._confirm(
+                    ConfirmAction(
+                        "C'est irréversible. Pour exécuter, dites : oui, confirme.",
+                        assessment.detail,
+                        True,
+                        2,
+                    )
+                )
+                allowed = final is not None and is_final_confirmation(final)
+                if not allowed:
+                    message = "Pas de confirmation explicite."
+                    yield Say("Sans confirmation explicite, j'ai refusé.")
+        elif is_no(answer) or isinstance(self._parser.parse(answer), Stop | Cancel):
+            yield Say("D'accord, je refuse.")
+        else:
+            message = "Réponse incomprise."
+            yield Say("Je n'ai pas compris, je refuse par sécurité.")
+        self._brain.respond_permission(request, allowed, "" if allowed else message)
+        if allowed:
+            yield Say("Entendu.")
+
+    def _confirm(self, action: ConfirmAction) -> Generator[Output, None, str | None]:
+        """Ask and return the answer, or None if there was none in time."""
+        self._confirmation = None
+        asked_at = self._now()
+        yield action
+        answer, self._confirmation = self._confirmation, None
+        if answer is None:
+            return None
+        text, answered_at = answer
+        if not text.strip():
+            return None
+        if (answered_at - asked_at).total_seconds() > self._settings.permission_timeout:
+            return None
+        return text
 
     def _pick_model(self, record: SessionRecord, text: str) -> str:
         if record.model_lock:

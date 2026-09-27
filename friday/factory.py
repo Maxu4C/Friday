@@ -89,6 +89,7 @@ def create_controller(config: FridayConfig) -> Controller:
         complex_model=models.complex,
         default_mode=config.claude.default_mode,
         workspace=config.claude.workspace,
+        permission_timeout=config.claude.permission_timeout_seconds,
     )
     return Controller(
         create_brain(config),

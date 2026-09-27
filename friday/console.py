@@ -6,7 +6,14 @@ import threading
 from collections.abc import Callable
 
 from friday.core.assistant import AssistantEvent, State, StateEvent, UserSaid
-from friday.core.controller import Ask, Say, ShowSessions, StateChanged, StopSpeaking
+from friday.core.controller import (
+    Ask,
+    ConfirmAction,
+    Say,
+    ShowSessions,
+    StateChanged,
+    StopSpeaking,
+)
 from friday.core.events import TextDelta, ToolResult, ToolUse, TurnCompleted
 from friday.core.messages import MODE_LABELS
 
@@ -62,6 +69,11 @@ class ConsoleDisplay:
                 self._write(f"  [refusé] {', '.join(event.permission_denials)}\n")
         elif isinstance(event, Say | Ask):
             self.say(event.text)
+        elif isinstance(event, ConfirmAction):
+            self.end_stream()
+            marker = "ACTION À RISQUE" if event.dangerous else "confirmation"
+            self._write(f"  [{marker}] {event.detail}\n")
+            self.say(event.question)
         elif isinstance(event, ShowSessions):
             self.end_stream()
             for record in event.sessions:

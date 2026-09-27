@@ -13,6 +13,7 @@ from friday.core.events import (
     BrainError,
     BrainErrorKind,
     BrainEvent,
+    PermissionRequest,
     RateLimitStatus,
     SessionStarted,
     TextDelta,
@@ -49,6 +50,17 @@ def parse_event(raw: dict[str, Any]) -> list[BrainEvent]:
         return [_parse_rate_limit(raw.get("rate_limit_info") or {})]
     if kind == "result":
         return [_parse_result(raw)]
+    if kind == "control_request":
+        request = raw.get("request") or {}
+        if request.get("subtype") == "can_use_tool":
+            return [
+                PermissionRequest(
+                    request_id=str(raw.get("request_id", "")),
+                    tool=str(request.get("tool_name", "")),
+                    input=dict(request.get("input") or {}),
+                    description=str(request.get("description") or ""),
+                )
+            ]
     return []
 
 

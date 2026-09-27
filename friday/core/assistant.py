@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 
-from friday.core.controller import Controller, Output, Say
+from friday.core.controller import ConfirmAction, Controller, Output, Say
 from friday.core.messages import HEARD_NOTHING, NOT_UNDERSTOOD
 from friday.core.narrator import Narrator
 from friday.core.ports import Ears
@@ -63,6 +63,8 @@ class Assistant:
         self._lock = threading.Lock()
         self._state = State.IDLE
         self._busy = False  # a request is being handled (Claude may still be answering)
+        # Set while FRIDAY waits for "oui"/"non" to a ConfirmAction.
+        self._confirmation: queue.Queue[tuple[str, str | None]] | None = None
         if narrator is not None:
             narrator.add_listener(self._on_speaking)
 
@@ -80,15 +82,24 @@ class Assistant:
 
     def wake(self, source: str = "mot d'activation") -> None:
         """Listen for a request (wake word, hotkey or button). Interrupts FRIDAY if needed."""
+        if self._confirmation is not None:
+            return  # already listening for the answer to a confirmation
         if self._state in (State.THINKING, State.SPEAKING):
             self.stop()
         self._queue.put(("wake", source))
 
     def submit_text(self, text: str) -> None:
-        self._queue.put(("text", text))
+        confirmation = self._confirmation
+        if confirmation is not None:
+            confirmation.put(("clavier", text))  # typed answer to "Vous confirmez ?"
+        else:
+            self._queue.put(("text", text))
 
     def stop(self) -> None:
         """Silence FRIDAY and interrupt Claude immediately."""
+        confirmation = self._confirmation
+        if confirmation is not None:
+            confirmation.put(("stop", "non"))  # stopping during a confirmation refuses
         self._controller.interrupt()
         if self._narrator is not None:
             self._narrator.stop()
@@ -148,6 +159,8 @@ class Assistant:
         try:
             for output in outputs:
                 self._emit(output)
+                if isinstance(output, ConfirmAction):
+                    self._controller.answer_confirmation(self._await_confirmation())
         finally:
             self._busy = False
             speaking = self._narrator is not None and self._narrator.speaking
@@ -157,6 +170,32 @@ class Assistant:
             if self._narrator is not None:
                 self._narrator.wait(FOLLOW_UP_WAIT)
             self._queue.put(("wake", "suite"))
+
+    def _await_confirmation(self) -> str:
+        """The spoken or typed answer to a confirmation ("" if none in time)."""
+        answers: queue.Queue[tuple[str, str | None]] = queue.Queue()
+        self._confirmation = answers
+        try:
+            if self._narrator is not None:
+                self._narrator.wait(FOLLOW_UP_WAIT)  # finish asking before listening
+            self._set_state(State.LISTENING)
+            ears = self._ears
+            if ears is not None:
+                threading.Thread(
+                    target=lambda: answers.put(("voix", ears.listen().text)),
+                    name="friday-confirmation",
+                    daemon=True,
+                ).start()
+            try:
+                source, text = answers.get(timeout=self._controller.permission_timeout)
+            except queue.Empty:
+                return ""
+            if text and source != "stop":
+                self._display(UserSaid(text, spoken=source == "voix"))
+            return text or ""
+        finally:
+            self._confirmation = None
+            self._set_state(State.THINKING)
 
     def _emit(self, output: Output) -> None:
         self._display(output)

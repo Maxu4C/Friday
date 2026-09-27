@@ -59,7 +59,7 @@ claude:
   permission_timeout_seconds: 30
   # Outils disponibles en mode Claude Code (le mode Claude n'en a aucun).
   code_tools: [Read, Edit, Write, Glob, Grep, Bash, PowerShell]
-  # Outils utilisables sans confirmation ; le reste est refusé (phase 6 : confirmation vocale).
+  # Outils utilisables sans confirmation ; pour tout le reste, FRIDAY demande « Vous confirmez ? ».
   allowed_tools:
     - Read
     - Edit
@@ -72,9 +72,9 @@ claude:
     - "Bash(git status *)"
     - "Bash(git log *)"
     - "Bash(start *)"
-  # Toujours soumis à confirmation, même dans le dossier de travail (le mode acceptEdits
-  # autoriserait sinon rm/Remove-Item sans rien demander). Tant que le serveur de
-  # permission (phase 6) n'existe pas, ces actions sont refusées.
+  # Toujours soumis à confirmation vocale, même dans le dossier de travail (le mode
+  # acceptEdits autoriserait sinon rm/Remove-Item sans rien demander). Les actions
+  # dangereuses (suppression récursive, registre, arrêt du PC…) exigent en plus « oui, confirme ».
   confirm_tools:
     - "PowerShell(Remove-Item *)"
     - "PowerShell(ri *)"

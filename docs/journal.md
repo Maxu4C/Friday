@@ -1,5 +1,28 @@
 # Journal de bord
 
+## Phase 6 — Permissions et confirmations vocales (2026-09-27)
+
+### Fait
+- **Demandes de permission de Claude Code transmises à FRIDAY** : en mode Claude Code, toute action hors `allowed_tools` et toute règle `confirm_tools` arrive sous forme de requête `can_use_tool` (outil, commande, description rédigée par Claude). FRIDAY la lit à voix haute (« Je dois exécuter une commande PowerShell : supprimer le fichier… Vous confirmez ? »), affiche la commande exacte, attend « oui » ou « non » (à la voix, ou au clavier), puis renvoie la décision à Claude Code.
+- `friday/core/safety.py` — **liste noire du §4.4** : suppression récursive (`Remove-Item -Recurse`, `rm -rf`, `del /s`, `rd /s`), formatage et disques (`format`, `Format-Volume`, `diskpart`, `Clear-Disk`), registre (`reg add/delete`, `*-ItemProperty`, `HKLM:`/`HKCU:`), arrêt/redémarrage, désinstallation (`Uninstall-Package`, `msiexec /x`, `winget/choco uninstall`), envoi d'e-mail, tout chemin sous `C:\Windows`, `bcdedit`/`takeown`, et `git push --force`/`reset --hard`/`clean -f`. Ces actions exigent une **confirmation en deux temps** : « oui », puis « oui, confirme » explicite ; toute autre seconde réponse refuse.
+- **Refus par défaut** : « non », « stop », « annule », une réponse incomprise, aucune réponse ou une réponse après **30 s** (`claude.permission_timeout_seconds`) → refus, annoncé oralement.
+- Pendant l'attente de la réponse, le délai global de la requête (180 s) repart à zéro ; FRIDAY finit de poser la question avant d'écouter ; le mot d'activation est ignoré (elle écoute déjà) ; une réponse tapée est acceptée même si elle écoute.
+- Toute autre requête de contrôle inattendue de Claude Code reçoit une erreur immédiate (Claude Code ne reste jamais bloqué).
+- `logs/actions.log` : chaque outil demandé, la décision (allow/deny) et sa raison.
+- 320 tests (politique de sécurité, requête réelle enregistrée, cerveau, contrôleur, chat, assistant vocal).
+
+### Vérifié en réel (Claude Code 2.1.283)
+- Suppression d'un fichier : question, « oui », fichier supprimé ; décision journalisée.
+- Suppression récursive d'un dossier : « ACTION À RISQUE (suppression récursive) », « oui » puis « oui, confirme », dossier supprimé.
+- Essai préalable : refus → Claude Code reçoit le refus et n'insiste pas ; le fichier reste en place.
+
+### Décision : pas de serveur MCP séparé (écart assumé au §4.4)
+- Le protocole prévoyait un serveur MCP local passé par `--permission-prompt-tool`. Claude Code 2.1.283 permet mieux : `--permission-prompts host --permission-prompt-tool stdio`, le mécanisme du SDK officiel, qui envoie les demandes de permission **sur le canal stream-json déjà ouvert** entre FRIDAY et Claude Code. Résultat identique (Claude Code demande, FRIDAY répond), avec moins de pièces : aucun processus supplémentaire, **aucun port réseau**, aucune communication inter-processus à sécuriser. Le paquet vide `friday/permission_server/` a été retiré ; la logique vit dans `core/safety.py` et `core/controller.py`.
+- Sans `--permission-prompt-tool stdio`, `--permission-prompts host` seul refuse d'office (vérifié) : les deux options sont nécessaires.
+
+### Reste
+- Affichage des demandes dans le HUD avec boutons Oui/Non : phase 7.
+
 ## Phase 5 — Mot d'activation, anti-écho, écoute permanente (2026-09-27)
 
 ### Fait

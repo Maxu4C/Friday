@@ -3,7 +3,7 @@ sentences, and silence as soon as the user asks for it."""
 
 from __future__ import annotations
 
-from friday.core.controller import Ask, Output, Say, StopSpeaking
+from friday.core.controller import Ask, ConfirmAction, Output, Say, StopSpeaking
 from friday.core.events import TextDelta, TurnCompleted
 from friday.core.narrator import Narrator
 from friday.core.speech import Display, Segment, Speak, SpeechStream
@@ -26,6 +26,8 @@ class SpeechRouter:
             return self._speak(self._stream.flush())
         if isinstance(output, Say | Ask):
             self._narrator.say(output.text)
+        elif isinstance(output, ConfirmAction):
+            self._narrator.say(output.question)
         elif isinstance(output, StopSpeaking):
             self._narrator.stop()
             self.reset()

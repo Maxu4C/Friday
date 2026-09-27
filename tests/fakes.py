@@ -11,6 +11,7 @@ from friday.core.events import (
     BrainError,
     BrainEvent,
     Mode,
+    PermissionRequest,
     RateLimitStatus,
     TextDelta,
     TurnCompleted,
@@ -29,6 +30,19 @@ def answer(*chunks: str, error: BrainError | None = None) -> Reply:
     return reply
 
 
+def needs_permission(tool: str, tool_input: dict[str, Any], description: str = "") -> Reply:
+    """Claude asks for `tool`; then says "Fait." if allowed, "Refusé." otherwise."""
+
+    def reply(_: str, state: SessionState) -> list[Any]:
+        def outcome(allowed: bool) -> list[BrainEvent]:
+            text = "Fait." if allowed else "Refusé."
+            return [TextDelta(text), TurnCompleted(text, state.session_id)]
+
+        return [PermissionRequest("req-1", tool, tool_input, description), outcome]
+
+    return reply  # type: ignore[return-value]
+
+
 class FakeBrain:
     """Records what the controller asks; replies with scripted events."""
 
@@ -37,8 +51,9 @@ class FakeBrain:
         self.replies = list(replies or [])
         self.sent: list[tuple[str, str, Mode]] = []  # (text, model, mode)
         self.calls: list[str] = []
+        self.permissions: list[tuple[str, bool, str]] = []  # (tool, allowed, message)
         self.last_rate_limit: RateLimitStatus | None = None
-        self._pending: list[BrainEvent] = []
+        self._pending: list[Any] = []
         self._ids = iter(f"sid-{n}" for n in range(1, 1000))
 
     @property
@@ -54,7 +69,16 @@ class FakeBrain:
 
     def events(self) -> Iterator[BrainEvent]:
         while self._pending:
-            yield self._pending.pop(0)
+            item = self._pending.pop(0)
+            if callable(item):  # continuation that depends on the permission decision
+                self._pending = list(item(self.permissions[-1][1])) + self._pending
+                continue
+            yield item
+
+    def respond_permission(
+        self, request: PermissionRequest, allow: bool, message: str = ""
+    ) -> None:
+        self.permissions.append((request.tool, allow, message))
 
     def interrupt(self) -> None:
         self.calls.append("interrupt")

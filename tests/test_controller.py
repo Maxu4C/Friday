@@ -31,7 +31,7 @@ class Clock:
         self.now = datetime(2026, 9, 27, 10, 0)
 
     def __call__(self) -> datetime:
-        self.now += timedelta(minutes=1)
+        self.now += timedelta(seconds=1)
         return self.now
 
 

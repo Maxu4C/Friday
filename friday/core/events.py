@@ -73,6 +73,16 @@ class ApiRetry:
 
 
 @dataclass(frozen=True)
+class PermissionRequest:
+    """Claude Code asks whether it may run a tool; answer with Brain.respond_permission."""
+
+    request_id: str
+    tool: str
+    input: dict[str, Any]
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class TurnCompleted:
     text: str
     session_id: str | None
@@ -82,5 +92,6 @@ class TurnCompleted:
 
 
 BrainEvent = (
-    SessionStarted | TextDelta | ToolUse | ToolResult | RateLimitStatus | ApiRetry | TurnCompleted
-)
+    SessionStarted | TextDelta | ToolUse | ToolResult | RateLimitStatus | ApiRetry
+    | PermissionRequest | TurnCompleted
+)  # fmt: skip

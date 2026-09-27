@@ -31,6 +31,7 @@ from friday.core.events import (
     BrainErrorKind,
     BrainEvent,
     Mode,
+    PermissionRequest,
     RateLimitStatus,
     SessionStarted,
     ToolUse,
@@ -117,8 +118,11 @@ def build_command(
         command += [
             "--tools", ",".join(settings.code_tools),
             "--permission-mode", "acceptEdits",
-            # Until the permission server (phase 6), anything not allowed is refused.
-            "--permission-prompts", "none",
+            # Anything outside --allowedTools (and every `ask` rule) is sent to FRIDAY as a
+            # can_use_tool control request on stdout; she answers on stdin after asking
+            # the user out loud. No extra process and no network port are involved.
+            "--permission-prompts", "host",
+            "--permission-prompt-tool", "stdio",
         ]  # fmt: skip
         if settings.allowed_tools:
             command += ["--allowedTools", ",".join(settings.allowed_tools)]
@@ -212,9 +216,28 @@ class _Process:
             except json.JSONDecodeError:
                 logger.debug("claude non-JSON output: %s", line[:200])
                 continue
+            if _unsupported_control_request(raw):
+                # Never leave claude waiting for an answer FRIDAY cannot give.
+                self._reply_error(str(raw.get("request_id", "")))
+                continue
             for event in parse_event(raw):
                 self.queue.put(event)
         self.queue.put(_EOF)
+
+    def _reply_error(self, request_id: str) -> None:
+        try:
+            self.write(
+                {
+                    "type": "control_response",
+                    "response": {
+                        "subtype": "error",
+                        "request_id": request_id,
+                        "error": "Non pris en charge par FRIDAY",
+                    },
+                }
+            )
+        except OSError:
+            logger.warning("Could not answer claude's control request")
 
     @staticmethod
     def _read_stderr(stream: IO[str]) -> None:
@@ -304,6 +327,39 @@ class ClaudeCodeBrain:
         if turn.forced_error is None:
             turn.forced_error = BrainError(BrainErrorKind.INTERRUPTED, "Interrompu.")
         self._request_interrupt(turn)
+
+    def respond_permission(
+        self, request: PermissionRequest, allow: bool, message: str = ""
+    ) -> None:
+        """Answer a can_use_tool request (after asking the user)."""
+        response: dict[str, Any] = (
+            {"behavior": "allow", "updatedInput": request.input}
+            if allow
+            else {"behavior": "deny", "message": message or "Refusé par l'utilisateur."}
+        )
+        actions_log.info(
+            "permission tool=%s input=%s decision=%s %s",
+            request.tool,
+            _short(request.input),
+            "allow" if allow else "deny",
+            message,
+        )
+        process = self._process
+        if process is None:
+            return
+        try:
+            process.write(
+                {
+                    "type": "control_response",
+                    "response": {
+                        "subtype": "success",
+                        "request_id": request.request_id,
+                        "response": response,
+                    },
+                }
+            )
+        except OSError:
+            logger.warning("Could not send the permission decision to claude")
 
     # -- session control --------------------------------------------------
 
@@ -439,6 +495,9 @@ class ClaudeCodeBrain:
             self._last_rate_limit = event
         elif isinstance(event, ToolUse):
             actions_log.info("tool=%s input=%s", event.name, _short(event.input))
+        elif isinstance(event, PermissionRequest):
+            # The user needs time to answer: give the request a fresh time budget.
+            turn.deadline = max(turn.deadline, self._clock() + self._settings.request_timeout)
         elif isinstance(event, ApiRetry):
             kind = api_retry_error(event)
             if kind is not None and turn.forced_error is None:
@@ -488,6 +547,12 @@ class ClaudeCodeBrain:
             )
         except OSError:
             logger.warning("Could not send interrupt to claude")
+
+
+def _unsupported_control_request(raw: dict[str, Any]) -> bool:
+    if raw.get("type") != "control_request":
+        return False
+    return (raw.get("request") or {}).get("subtype") != "can_use_tool"
 
 
 def _short(data: dict[str, Any], limit: int = 200) -> str:

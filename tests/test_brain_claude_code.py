@@ -221,7 +221,8 @@ def test_code_mode_command_restricts_tools_and_permissions(tmp_path: Path) -> No
     command = build_command("claude", state, tmp_path / "p.md", make_settings(tmp_path))
     assert command[command.index("--tools") + 1] == "Read,Edit,Bash"
     assert command[command.index("--permission-mode") + 1] == "acceptEdits"
-    assert command[command.index("--permission-prompts") + 1] == "none"
+    assert command[command.index("--permission-prompts") + 1] == "host"
+    assert command[command.index("--permission-prompt-tool") + 1] == "stdio"
     assert command[command.index("--allowedTools") + 1] == "Read,Bash(git status *)"
     assert command[command.index("--resume") + 1] == "abc"
     assert not FORBIDDEN_FLAGS.intersection(command)

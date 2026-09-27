@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from friday.core.events import BrainEvent, Mode, RateLimitStatus
+from friday.core.events import BrainEvent, Mode, PermissionRequest, RateLimitStatus
 
 
 @dataclass
@@ -92,6 +92,10 @@ class Brain(Protocol):
         """
 
     def interrupt(self) -> None: ...
+
+    def respond_permission(
+        self, request: PermissionRequest, allow: bool, message: str = ""
+    ) -> None: ...
 
     def set_model(self, alias: str) -> None: ...
 
