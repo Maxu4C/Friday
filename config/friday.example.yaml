@@ -36,8 +36,58 @@ claude:
   binary: claude
   default_mode: claude  # claude | claude_code
   workspace: C:\Users\maxch\Friday\workspace
+  persona_file: config/persona.md   # consignes de FRIDAY (équivalent du CLAUDE.md)
   request_timeout_seconds: 180
   permission_timeout_seconds: 30
+  # Outils disponibles en mode Claude Code (le mode Claude n'en a aucun).
+  code_tools: [Read, Edit, Write, Glob, Grep, Bash, PowerShell]
+  # Outils utilisables sans confirmation ; le reste est refusé (phase 6 : confirmation vocale).
+  allowed_tools:
+    - Read
+    - Edit
+    - Write
+    - Glob
+    - Grep
+    - "Bash(dir *)"
+    - "PowerShell(Get-ChildItem *)"
+    - "Bash(python *)"
+    - "Bash(git status *)"
+    - "Bash(git log *)"
+    - "Bash(start *)"
+  # Toujours soumis à confirmation, même dans le dossier de travail (le mode acceptEdits
+  # autoriserait sinon rm/Remove-Item sans rien demander). Tant que le serveur de
+  # permission (phase 6) n'existe pas, ces actions sont refusées.
+  confirm_tools:
+    - "PowerShell(Remove-Item *)"
+    - "PowerShell(ri *)"
+    - "PowerShell(rm *)"
+    - "PowerShell(del *)"
+    - "PowerShell(erase *)"
+    - "PowerShell(rd *)"
+    - "PowerShell(rmdir *)"
+    - "PowerShell(Clear-Content *)"
+    - "PowerShell(Clear-Disk *)"
+    - "PowerShell(Format-Volume *)"
+    - "PowerShell(Stop-Computer *)"
+    - "PowerShell(Restart-Computer *)"
+    - "PowerShell(Stop-Process *)"
+    - "PowerShell(Set-ItemProperty *)"
+    - "PowerShell(Remove-ItemProperty *)"
+    - "PowerShell(Uninstall-Package *)"
+    - "PowerShell(Send-MailMessage *)"
+    - "PowerShell(git push *)"
+    - "PowerShell(git reset *)"
+    - "PowerShell(git clean *)"
+    - "Bash(rm *)"
+    - "Bash(rmdir *)"
+    - "Bash(del *)"
+    - "Bash(format *)"
+    - "Bash(diskpart *)"
+    - "Bash(reg *)"
+    - "Bash(shutdown *)"
+    - "Bash(git push *)"
+    - "Bash(git reset *)"
+    - "Bash(git clean *)"
 
 models:
   # Seuls les modèles validés en phase 0 (docs/environnement.md) sont listés.
@@ -52,19 +102,6 @@ router:
   simple_max_words: 20
   simple_patterns: ["qu'est-ce que", "c'est quoi", "combien", "quelle heure", "traduis", "définis", "explique en une phrase"]
   complex_patterns: ["crée", "modifie", "corrige", "ouvre", "exécute", "cherche dans", "analyse", "refactorise", "déploie", "compare", "conçois", "planifie", "pourquoi ça plante"]
-
-allowed_tools:
-  - Read
-  - Edit
-  - Write
-  - Glob
-  - Grep
-  - "Bash(dir *)"
-  - "Bash(Get-ChildItem *)"
-  - "Bash(python *)"
-  - "Bash(git status *)"
-  - "Bash(git log *)"
-  - "Bash(start *)"
 
 ui:
   host: 127.0.0.1       # ne jamais exposer sur le réseau
